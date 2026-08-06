@@ -41,58 +41,53 @@ class OthelloBoard:
 			lines.append(line)
 		return "\n".join(lines)
 
+	def _walk_direction(self, row, col, dr, dc, player, opponent) -> list:
+		r = row + dr
+		c = col + dc
+
+		to_flip = []
+
+		while 0 <= r < 8 and 0 <= c < 8:
+			cell = self.board[r][c]
+
+			if cell == EMPTY:
+				return []
+			elif cell == opponent:
+				to_flip.append((r, c))
+			elif cell == player:
+				return to_flip
+
+			r += dr
+			c += dc
+
+		return []
+
 	def get_valid_moves(self, player) -> list:
-		valids = []
-		opponent = WHITE if player == BLACK else WHITE
+		valids = set()
+		opponent = WHITE if player == BLACK else BLACK
 
 		for rowIdx, row in enumerate(self.board):
 			for colIdx, cell in enumerate(row):
 				if cell == EMPTY:
 					for dr, dc in DIRECTIONS:
-						r = rowIdx + dr
-						c = colIdx + dc
-
-						other_colour_found = False
-
-						while 0 <= r < 8 and 0 <= c < 8:
-							if self.board[r][c] == EMPTY:
-								break
-							elif self.board[r][c] == opponent:
-								other_colour_found = True
-
-							if self.board[r][c] == player and other_colour_found:
-								valids.append((rowIdx, colIdx))
-								break
-
-							r += dr
-							c += dc
+						if self._walk_direction(rowIdx, colIdx, dr, dc, player, opponent):
+							valids.add((rowIdx, colIdx))
 
 		return valids
 
 	def make_move(self, player, row, col) -> None:
-		opponent = WHITE if player == BLACK else WHITE
+		opponent = WHITE if player == BLACK else BLACK
 
-		if (row, col) in self.get_valid_moves(player):
-			self.board[row][col] = player
+		flips = []
+		for dr, dc in DIRECTIONS:
+			flips += self._walk_direction(row, col, dr, dc, player, opponent)
 
-			for dr, dc in DIRECTIONS:
-				r = row + dr
-				c = col + dc
-				to_flip = []
+		if not flips:
+			raise ValueError(f"Invalid move: ({row}, {col})")
 
-				while 0 <= r < 8 and 0 <= c < 8:
-					if self.board[r][c] == EMPTY:
-						break
-					elif self.board[r][c] == opponent:
-						to_flip.append((r, c))
-					elif self.board[r][c] == player:
-						# found our piece, flip everything collected
-						for fr, fc in to_flip:
-							self.board[fr][fc] = player
-						break
-
-					r += dr
-					c += dc
+		self.board[row][col] = player
+		for fr, fc in flips:
+			self.board[fr][fc] = player
 
 
 if __name__ == "__main__":
