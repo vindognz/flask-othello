@@ -158,8 +158,12 @@ if __name__ == "__main__":
 	import doctest
 	doctest.testmod()
 
+	import ai
+
 	board = OthelloBoard()
 	print(board)
-	print(board.get_valid_moves(BLACK))
-	board.make_move(BLACK, 2, 3)
-	print(board)
+	AI = ai.OthelloAI(1)
+	print(AI.evaluate(board, BLACK))
+	# print(board.get_valid_moves(BLACK))
+	# board.make_move(BLACK, 2, 3)
+	# print(board)
