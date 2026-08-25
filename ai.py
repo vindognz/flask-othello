@@ -13,7 +13,7 @@ WEIGHTS = [
     [100, -20,  10,   5,   5,  10, -20, 100]
 ]
 
-MOBILITY_WEIGHT = 3 # idk
+MOBILITY_WEIGHT = 3 # value determined by some trialing
 
 class OthelloAI:
     def __init__(self, depth):
@@ -24,7 +24,7 @@ class OthelloAI:
 
     def evaluate(self, board: OthelloBoard, player):
         """
-        Evaluates the board position by a simple piece counting heuristic
+        Evaluates the board position by a positional weight and mobility heuristic
         If the return value is greater than zero, the player is winning
         If the return value is lower than zero, the opponent is winning
         If the return value IS zero, the game position is equal
@@ -49,30 +49,33 @@ class OthelloAI:
     def _copy_board(self, board: OthelloBoard):
         new_board = OthelloBoard.__new__(OthelloBoard)
         new_board.board = [row[:] for row in board.board]
+        new_board.current_player = board.current_player
 
         return new_board
 
-    def minimax(self, board: OthelloBoard, depth, current_player, player, alpha=-float('inf'), beta=float('inf')):
+    def minimax(self, board: OthelloBoard, depth, player, alpha=-float('inf'), beta=float('inf')):
         """
         I'm scared.
         """
-
         if depth == 0:
             return self.evaluate(board, player)
 
+        current_player = board.current_player
         valid_moves = board.get_valid_moves(current_player)
 
         if len(valid_moves) == 0:
-            current_player = WHITE if current_player == BLACK else BLACK
-
-            valid_moves = board.get_valid_moves(current_player)
+            board.pass_turn()
+            valid_moves = board.get_valid_moves(board.current_player)
 
             if len(valid_moves) == 0:
-                return self.evaluate(board, player) # game over
+                # game over
+                opponent = WHITE if player == BLACK else BLACK
+                player_count = sum(row.count(player) for row in board.board)
+                opponent_count = sum(row.count(opponent) for row in board.board)
+                return (player_count - opponent_count) * 10000
             else:
-                return self.minimax(board, depth, current_player, player, alpha, beta)
+                return self.minimax(board, depth, player, alpha, beta)
 
-        opponent = WHITE if current_player == BLACK else BLACK
         is_maximising = (current_player == player)
         best_score = -float('inf') if is_maximising else float('inf')
 
@@ -80,9 +83,9 @@ class OthelloAI:
 
         for row, col in valid_moves:
             new_board = self._copy_board(board)
-            new_board.make_move(current_player, row, col)
+            new_board.make_move(row, col)
 
-            score = self.minimax(new_board, depth-1, opponent, player, alpha, beta)
+            score = self.minimax(new_board, depth - 1, player, alpha, beta)
 
             if is_maximising:
                 best_score = max(best_score, score)
@@ -91,7 +94,8 @@ class OthelloAI:
                 best_score = min(best_score, score)
                 beta = min(beta, score)
 
-            if beta <= alpha: break
+            if beta <= alpha:
+                break
 
         return best_score
 
@@ -103,15 +107,13 @@ class OthelloAI:
         best_score = -float('inf')
         best_move = None
 
-        opponent = WHITE if player == BLACK else BLACK
-
         valid_moves = sorted(valid_moves, key=lambda move: WEIGHTS[move[0]][move[1]], reverse=True)
 
         for row, col in valid_moves:
             new_board = self._copy_board(board)
-            new_board.make_move(player, row, col)
+            new_board.make_move(row, col)
 
-            score = self.minimax(new_board, self.depth, opponent, player)
+            score = self.minimax(new_board, self.depth, player)
 
             if score > best_score:
                 best_score = score
@@ -128,22 +130,20 @@ if __name__ == "__main__":
 
     times = []
 
-    player = BLACK
-
     while board.get_valid_moves(BLACK) or board.get_valid_moves(WHITE):
         try:
             subprocess.run(["clear"], check=False)
             print(board)
             t0 = time.time()
-            move = ai.get_best_move(board, player)
+            move = ai.get_best_move(board, board.current_player)
             t1 = time.time()
-            print(f"AI ({player}) picked: {move} in {t1-t0:.2f}s")
+            print(f"AI ({board.current_player}) picked: {move} in {t1-t0:.2f}s")
             times.append(t1-t0)
 
             if move is not None:
-                board.make_move(player, *move)
-
-            player = WHITE if player == BLACK else BLACK
+                board.make_move(*move)
+            else:
+                board.pass_turn()
 
             # time.sleep(0.5)
 

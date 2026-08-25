@@ -42,6 +42,8 @@ class OthelloBoard:
 		self.board[4][3] = BLACK
 		self.board[4][4] = WHITE
 
+		self.current_player = BLACK
+
 	def __repr__(self) -> str:
 		"""
 		Pretty print the board.
@@ -64,6 +66,10 @@ class OthelloBoard:
 			line += " ".join(SYMBOLS[piece] for piece in row)
 			lines.append(line)
 		return "\n".join(lines)
+
+	@property
+	def opponent(self):
+		return WHITE if self.current_player == BLACK else BLACK
 
 	def _walk_direction(self, row, col, dr, dc, player, opponent) -> list:
 		"""
@@ -104,7 +110,7 @@ class OthelloBoard:
 
 		return []
 
-	def get_valid_moves(self, player) -> list:
+	def get_valid_moves(self, player) -> set:
 		"""
 		Return the set of all legal (row, col) moves for player.
 
@@ -126,32 +132,40 @@ class OthelloBoard:
 
 		return valids
 
-	def make_move(self, player, row, col) -> None:
+	def make_move(self, row, col) -> None:
 		"""
 		Place player's piece at (row, col) and flip captured pieces.
 		Raises ValueError if the move is illegal.
 
 		>>> board = OthelloBoard()
-		>>> board.make_move(BLACK, 2, 3)
+		>>> board.make_move(2, 3)
 		>>> board.board[2][3], board.board[3][3]
 		(1, 1)
-		>>> board.make_move(BLACK, 0, 0)
+		>>> board.make_move(0, 0)
 		Traceback (most recent call last):
 			...
 		ValueError: Invalid move: (0, 0)
 		"""
-		opponent = WHITE if player == BLACK else BLACK
+		if 0 <= row < 8 and 0 <= col < 8:
+			if self.board[row][col] != EMPTY:
+				raise ValueError(f"Invalid move: ({row}, {col})")
 
-		flips = []
-		for dr, dc in DIRECTIONS:
-			flips += self._walk_direction(row, col, dr, dc, player, opponent)
+			flips = []
+			for dr, dc in DIRECTIONS:
+				flips += self._walk_direction(row, col, dr, dc, self.current_player, self.opponent)
 
-		if not flips:
+			if not flips:
+				raise ValueError(f"Invalid move: ({row}, {col})")
+
+			self.board[row][col] = self.current_player
+			for fr, fc in flips:
+				self.board[fr][fc] = self.current_player
+			self.current_player = self.opponent
+		else:
 			raise ValueError(f"Invalid move: ({row}, {col})")
 
-		self.board[row][col] = player
-		for fr, fc in flips:
-			self.board[fr][fc] = player
+	def pass_turn(self):
+		self.current_player = self.opponent
 
 
 if __name__ == "__main__":
