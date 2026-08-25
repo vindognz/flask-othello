@@ -13,6 +13,8 @@ WEIGHTS = [
     [100, -20,  10,   5,   5,  10, -20, 100]
 ]
 
+MOBILITY_WEIGHT = 3 # idk
+
 class OthelloAI:
     def __init__(self, depth):
         """
@@ -39,7 +41,10 @@ class OthelloAI:
                 elif cell == opponent:
                     opponent_score += WEIGHTS[row_idx][col_idx]
 
-        return player_score - opponent_score
+        positional_score = player_score - opponent_score
+        mobility_score = len(board.get_valid_moves(player)) - len(board.get_valid_moves(opponent))
+
+        return positional_score + mobility_score * MOBILITY_WEIGHT
 
     def _copy_board(self, board: OthelloBoard):
         new_board = OthelloBoard.__new__(OthelloBoard)
@@ -119,7 +124,7 @@ if __name__ == "__main__":
     import time
     import subprocess
     board = OthelloBoard()
-    ai = OthelloAI(depth=6)
+    ai = OthelloAI(depth=3)
 
     times = []
 
