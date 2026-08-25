@@ -57,24 +57,25 @@ class OthelloAI:
         """
         I'm scared.
         """
-        if depth == 0:
-            return self.evaluate(board, player)
-
         current_player = board.current_player
         valid_moves = board.get_valid_moves(current_player)
 
         if len(valid_moves) == 0:
-            board.pass_turn()
-            valid_moves = board.get_valid_moves(board.current_player)
+            passed_board = self._copy_board(board)
+            passed_board.pass_turn()
+            valid_moves = passed_board.get_valid_moves(passed_board.current_player)
 
             if len(valid_moves) == 0:
-                # game over
                 opponent = WHITE if player == BLACK else BLACK
                 player_count = sum(row.count(player) for row in board.board)
                 opponent_count = sum(row.count(opponent) for row in board.board)
                 return (player_count - opponent_count) * 10000
-            else:
-                return self.minimax(board, depth, player, alpha, beta)
+            if depth == 0:
+                return self.evaluate(board, player)
+            return self.minimax(passed_board, depth, player, alpha, beta)
+
+        if depth == 0:
+            return self.evaluate(board, player)
 
         is_maximising = (current_player == player)
         best_score = -float('inf') if is_maximising else float('inf')
@@ -103,6 +104,9 @@ class OthelloAI:
         """
         Wrapper for minimax()
         """
+        if player != board.current_player:
+            raise ValueError("Player must match board.current_player")
+
         valid_moves = board.get_valid_moves(player)
         best_score = -float('inf')
         best_move = None

@@ -165,6 +165,8 @@ class OthelloBoard:
 			raise ValueError(f"Invalid move: ({row}, {col})")
 
 	def pass_turn(self):
+		if self.get_valid_moves(self.current_player):
+			raise ValueError("Cannot pass while legal moves are available")
 		self.current_player = self.opponent
 
 
