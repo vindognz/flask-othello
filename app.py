@@ -4,6 +4,7 @@ from flask import Flask, jsonify, request, session
 import secrets
 
 from board import OthelloBoard, BLACK, WHITE
+from ai import OthelloAI
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -45,31 +46,33 @@ def new_game():
 def get_game(game_id):
     if game_id in games:
         game = games[game_id]
-        player_id = get_or_create_player_id()
+    else:
+        return jsonify({"error": "Game not found"}), 404
+
+    board: OthelloBoard = game["board"]
+
+    player_id = get_or_create_player_id()
+    your_colour = None
+
+    # if the player is not holding a seat
+        # if a seat is empty
+            # CLAIM
+
+    if game["white_session"] != player_id and game["black_session"] != player_id:
+        if game["white_session"] is None:
+            game["white_session"] = player_id
+            your_colour = WHITE
+        elif game["black_session"] is None:
+            game["black_session"] = player_id
+            your_colour = BLACK
+    elif game["white_session"] == player_id:
+        your_colour = WHITE
+    elif game["black_session"] == player_id:
+        your_colour = BLACK
+    else:
         your_colour = None
 
-        # if the player is not holding a seat
-            # if a seat is empty
-                # CLAIM
-
-        if game["white_session"] != player_id and game["black_session"] != player_id:
-            if game["white_session"] is None:
-                game["white_session"] = player_id
-                your_colour = WHITE
-            elif game["black_session"] is None:
-                game["black_session"] = player_id
-                your_colour = BLACK
-        elif game["white_session"] == player_id:
-            your_colour = WHITE
-        elif game["black_session"] == player_id:
-            your_colour = BLACK
-        else:
-            your_colour = None
-
-        return jsonify({"board":game["board"].board, "current_player": game["board"].current_player, "your_colour": your_colour, "current_legal_moves": list(game["board"].get_valid_moves(game["board"].current_player))})
-
-
-    return jsonify({"error": "Game not found"}), 404
+    return jsonify({"board":board.board, "current_player": board.current_player, "your_colour": your_colour, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
 
 @app.route("/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
@@ -77,6 +80,8 @@ def make_move(game_id):
         game = games[game_id]
     else:
         return jsonify({"error": "Game not found"}), 404
+
+    board: OthelloBoard = game["board"]
 
     player = get_or_create_player_id()
     player_colour = None
@@ -91,7 +96,7 @@ def make_move(game_id):
     if not player_colour:
         return jsonify({"error": "Spectators can't make moves"}), 403
 
-    if not player_colour == game["board"].current_player:
+    if not player_colour == board.current_player:
         return jsonify({"error": "Not your turn"}), 403
 
 
@@ -103,12 +108,45 @@ def make_move(game_id):
         return jsonify({"error": "Missing row or col"}), 400
 
     try:
-        game["board"].make_move(row, col)
+        board.make_move(row, col)
     except ValueError:
         return jsonify({"error": "Illegal move!"}), 403
     except TypeError:
         return jsonify({"error": "row/col must be integers"}), 400
 
-    return jsonify({"board":game["board"].board, "current_player": game["board"].current_player, "current_legal_moves": list(game["board"].get_valid_moves(game["board"].current_player))})
+    return jsonify({"board":board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
 
+@app.route("/game/<game_id>/ai-move", methods=['POST'])
+def ai_move(game_id):
+    if game_id in games:
+        game = games[game_id]
+    else:
+        return jsonify({"error": "Game not found"}), 404
 
+    board: OthelloBoard = game["board"]
+
+    player = get_or_create_player_id()
+    player_colour = None
+
+    if game["white_session"] == player:
+        player_colour = WHITE
+    elif game["black_session"] == player:
+        player_colour = BLACK
+    else:
+        pass # stay None because spectator :)
+
+    if not player_colour:
+        return jsonify({"error": "Spectators can't make moves"}), 403
+
+    if not player_colour == board.current_player:
+        return jsonify({"error": "Not your turn"}), 403
+
+    ai = OthelloAI(depth=3) # hardcoded depth of 3 for now..
+    move = ai.get_best_move(board, board.current_player)
+
+    if move is not None:
+        board.make_move(*move)
+    else:
+        board.pass_turn()
+
+    return jsonify({"board":board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
