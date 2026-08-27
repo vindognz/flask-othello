@@ -69,4 +69,46 @@ def get_game(game_id):
         return jsonify({"board":game["board"].board, "current_player": game["board"].current_player, "your_colour": your_colour, "current_legal_moves": list(game["board"].get_valid_moves(game["board"].current_player))})
 
 
-    return jsonify({"error": "Game not found."}), 404
+    return jsonify({"error": "Game not found"}), 404
+
+@app.route("/game/<game_id>/move", methods=['POST'])
+def make_move(game_id):
+    if game_id in games:
+        game = games[game_id]
+    else:
+        return jsonify({"error": "Game not found"}), 404
+
+    player = get_or_create_player_id()
+    player_colour = None
+
+    if game["white_session"] == player:
+        player_colour = WHITE
+    elif game["black_session"] == player:
+        player_colour = BLACK
+    else:
+        pass # stay None because spectator :)
+
+    if not player_colour:
+        return jsonify({"error": "Spectators can't make moves"}), 403
+
+    if not player_colour == game["board"].current_player:
+        return jsonify({"error": "Not your turn"}), 403
+
+
+    data = request.get_json(silent=True) or {}
+    row = data.get('row')
+    col = data.get('col')
+
+    if row is None or col is None:
+        return jsonify({"error": "Missing row or col"}), 400
+
+    try:
+        game["board"].make_move(row, col)
+    except ValueError:
+        return jsonify({"error": "Illegal move!"}), 403
+    except TypeError:
+        return jsonify({"error": "row/col must be integers"}), 400
+
+    return jsonify({"board":game["board"].board, "current_player": game["board"].current_player, "current_legal_moves": list(game["board"].get_valid_moves(game["board"].current_player))})
+
+
