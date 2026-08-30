@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FlaskOthello</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>FlaskOthello</h1>
+    <p>Start a new game as:</p>
+    <button onclick="createGame('black')">Black</button>
+    <button onclick="createGame('white')">White</button>
+
+    <script>
+        async function createGame(colour) {
+            const response = await fetch("/api/game/new", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ host_colour: colour }),
+            });
+            const data = await response.json();
+            window.location.href = `/game/${data.game_id}`;
+        }
+    </script>
+</body>
+</html>

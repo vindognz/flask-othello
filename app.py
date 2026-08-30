@@ -1,6 +1,6 @@
 """ Flask backend for FlaskOthello """
 
-from flask import Flask, jsonify, request, session
+from flask import Flask, jsonify, request, session, render_template
 import secrets
 
 from board import OthelloBoard, BLACK, WHITE
@@ -21,7 +21,7 @@ def get_or_create_player_id() -> str:
     return session["player_id"]
 
 
-@app.route("/game/new", methods=['POST'])
+@app.route("/api/game/new", methods=['POST'])
 def new_game():
     player_id = get_or_create_player_id()
 
@@ -42,7 +42,7 @@ def new_game():
 
     return jsonify({"game_id": game_id}), 200
 
-@app.route("/game/<game_id>", methods=['GET'])
+@app.route("/api/game/<game_id>", methods=['GET'])
 def get_game(game_id):
     if game_id in games:
         game = games[game_id]
@@ -72,14 +72,19 @@ def get_game(game_id):
     else:
         your_colour = None
 
-    return jsonify({"board":board.board, "current_player": board.current_player, "your_colour": your_colour, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
+    both_joined = game["black_session"] is not None and game["white_session"] is not None
 
-@app.route("/game/<game_id>/move", methods=['POST'])
+    return jsonify({ "board": board.board, "current_player": board.current_player, "your_colour": your_colour, "current_legal_moves": list(board.get_valid_moves(board.current_player)), "both_joined": both_joined })
+
+@app.route("/api/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
     if game_id in games:
         game = games[game_id]
     else:
         return jsonify({"error": "Game not found"}), 404
+
+    if game["black_session"] is None or game["white_session"] is None:
+        return jsonify({"error": "Waiting for both players to join"}), 403
 
     board: OthelloBoard = game["board"]
 
@@ -114,14 +119,17 @@ def make_move(game_id):
     except TypeError:
         return jsonify({"error": "row/col must be integers"}), 400
 
-    return jsonify({"board":board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
+    return jsonify({"board": board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
 
-@app.route("/game/<game_id>/ai-move", methods=['POST'])
+@app.route("/api/game/<game_id>/ai-move", methods=['POST'])
 def ai_move(game_id):
     if game_id in games:
         game = games[game_id]
     else:
         return jsonify({"error": "Game not found"}), 404
+
+    if game["black_session"] is None or game["white_session"] is None:
+        return jsonify({"error": "Waiting for both players to join"}), 403
 
     board: OthelloBoard = game["board"]
 
@@ -149,4 +157,17 @@ def ai_move(game_id):
     else:
         board.pass_turn()
 
-    return jsonify({"board":board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
+    return jsonify({"board": board.board, "current_player": board.current_player, "current_legal_moves": list(board.get_valid_moves(board.current_player))})
+
+@app.route("/game/<game_id>", methods=['GET'])
+def serve_game_page(game_id):
+    return render_template("index.html")
+
+@app.route("/", methods=['GET'])
+def landing():
+    return render_template("landing.html")
+
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
