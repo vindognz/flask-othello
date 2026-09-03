@@ -7,16 +7,33 @@
 </head>
 <body>
     <h1>FlaskOthello</h1>
-    <p>Start a new game as:</p>
-    <button onclick="createGame('black')">Black</button>
-    <button onclick="createGame('white')">White</button>
+
+    <div id="opponent-choice">
+        <p>Play against:</p>
+        <button onclick="chooseOpponent('human')">Another Player</button>
+        <button onclick="chooseOpponent('cpu')">CPU</button>
+    </div>
+
+    <div id="colour-choice" style="display: none;">
+        <p>Play as:</p>
+        <button onclick="createGame('black')">Black</button>
+        <button onclick="createGame('white')">White</button>
+    </div>
 
     <script>
+        let chosenOpponent = null;
+
+        function chooseOpponent(type) {
+            chosenOpponent = type;
+            document.getElementById("opponent-choice").style.display = "none";
+            document.getElementById("colour-choice").style.display = "block";
+        }
+
         async function createGame(colour) {
             const response = await fetch("/api/game/new", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ host_colour: colour }),
+                body: JSON.stringify({ host_colour: colour, opponent: chosenOpponent }),
             });
             const data = await response.json();
             window.location.href = `/game/${data.game_id}`;
