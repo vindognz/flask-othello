@@ -41,6 +41,10 @@ function renderBoard(data) {
                 cell.classList.add("white");
             }
 
+            if (data.last_move && row === data.last_move[0] && col === data.last_move[1]) {
+                cell.classList.add("last-move");
+            }
+
             // is this cell a legal move, AND is it actually my turn?
             const isLegal = data.current_legal_moves.some(
                 (move) => move[0] === row && move[1] === col
@@ -60,6 +64,23 @@ function renderBoard(data) {
 
 function updateStatus(data) {
     const status = document.getElementById("status");
+
+    if (data.game_over) {
+        const flatBoard = data.board.flat();
+
+        const blackCount = flatBoard.filter(cell => cell === 1).length;
+        const whiteCount = flatBoard.filter(cell => cell === 2).length;
+
+        const winningColour = blackCount > whiteCount ? "Black" : "White";
+
+        if (blackCount != whiteCount) {
+            status.textContent = `${winningColour} wins!\n${blackCount}-${whiteCount}`
+        } else {
+            status.textContent = `It's a draw!\n${blackCount}-${whiteCount}`
+        }
+
+        return
+    }
 
     if (data.your_colour === null) {
         status.textContent = "You're spectating.";

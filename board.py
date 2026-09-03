@@ -44,6 +44,10 @@ class OthelloBoard:
 
 		self.current_player = BLACK
 
+		self.game_over = False
+
+		self.last_move = None
+
 	def __repr__(self) -> str:
 		"""
 		Pretty print the board.
@@ -158,9 +162,20 @@ class OthelloBoard:
 				raise ValueError(f"Invalid move: ({row}, {col})")
 
 			self.board[row][col] = self.current_player
+			self.last_move = (row, col)
+
 			for fr, fc in flips:
 				self.board[fr][fc] = self.current_player
 			self.current_player = self.opponent
+
+			next_player_valids = self.get_valid_moves(self.current_player)
+			mover_valids = self.get_valid_moves(self.opponent)
+
+			if not next_player_valids and not mover_valids:
+				self.game_over = True
+			elif not next_player_valids:
+				self.pass_turn()
+
 		else:
 			raise ValueError(f"Invalid move: ({row}, {col})")
 

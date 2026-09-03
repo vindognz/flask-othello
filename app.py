@@ -74,7 +74,15 @@ def get_game(game_id):
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
 
-    return jsonify({ "board": board.board, "current_player": board.current_player, "your_colour": your_colour, "current_legal_moves": list(board.get_valid_moves(board.current_player)), "both_joined": both_joined })
+    return jsonify({ 
+        "board": board.board,
+        "current_player": board.current_player,
+        "your_colour": your_colour,
+        "current_legal_moves": list(board.get_valid_moves(board.current_player)),
+        "both_joined": both_joined,
+        "last_move": list(board.last_move) if board.last_move else None,
+        "game_over": board.game_over,
+    })
 
 @app.route("/api/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
