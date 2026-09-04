@@ -39,7 +39,7 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined):
         "game_over": board.game_over,
     }
 
-def archive_game(game_id, board: OthelloBoard):
+def archive_game(game_id, board: OthelloBoard, resigned_colour=None):
     """ Archive a completed game's state and delete it's entry in games """
     black_count = sum(row.count(BLACK) for row in board.board)
     white_count = sum(row.count(WHITE) for row in board.board)
@@ -49,6 +49,7 @@ def archive_game(game_id, board: OthelloBoard):
         "black_count": black_count,
         "white_count": white_count,
         "last_move": list(board.last_move) if board.last_move else None,
+        "resigned_colour": resigned_colour,
     }
 
     del games[game_id]
@@ -171,6 +172,28 @@ def make_move(game_id):
     both_joined = game["black_session"] is not None and game["white_session"] is not None
     return jsonify(serialize_game(board, player_colour, both_joined))
 
+@app.route("/api/game/<game_id>/resign", methods=['POST'])
+def resign(game_id):
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    game = games[game_id]
+    board: OthelloBoard = game["board"]
+
+    player = get_or_create_player_id()
+    player_colour = None
+
+    if game["white_session"] == player:
+        player_colour = WHITE
+    elif game["black_session"] == player:
+        player_colour = BLACK
+
+    if not player_colour:
+        return jsonify({"error": "Spectators can't resign"}), 403
+
+    archive_game(game_id, board, resigned_colour=player_colour)
+    return jsonify({"status": "resigned"}), 200
+
 @app.route("/api/archive/<game_id>", methods=['GET'])
 def get_archive(game_id):
     if game_id not in archives:
@@ -182,6 +205,7 @@ def get_archive(game_id):
         "black_count": archived["black_count"],
         "white_count": archived["white_count"],
         "last_move": archived["last_move"],
+        "resigned_colour": archived["resigned_colour"]
     })
 
 @app.route("/game/<game_id>", methods=['GET'])

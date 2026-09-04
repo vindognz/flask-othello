@@ -16,6 +16,14 @@ async function fetchGameState() {
     const data = await response.json();
 
     if (!response.ok) {
+        if (!isArchive && response.status === 404) {
+            // the game may have just been archived. let's check
+            const archiveCheck = await fetch(`/api/archive/${gameId}`);
+            if (archiveCheck.ok) {
+                window.location.href = `/archive/${gameId}`;
+                return;
+            }
+        }
         document.getElementById("status").textContent = data.error || "Something went wrong";
         return;
     }
@@ -70,12 +78,25 @@ function renderBoard(data) {
 
     renderCells(data.board, data.last_move, data.current_legal_moves, canClick);
     updateStatus(data);
+
+    if (data.your_colour !== null && data.both_joined) {
+        document.getElementById("resign-btn").style.display = "";
+    } else {
+        document.getElementById("resign-btn").style.display = "none";
+    }
 }
 
 function renderArchive(data) {
     renderCells(data.board, data.last_move, [], false);
 
     const status = document.getElementById("status");
+
+    if (data.resigned_colour) {
+        const winner = data.resigned_colour === 1 ? "White" : "Black";
+        status.textContent = `Archived game - ${winner} won (by resignation)`
+        return
+    }
+
     const { black_count, white_count } = data;
 
     if (black_count === white_count) {
@@ -93,10 +114,10 @@ function updateStatus(data) {
         const flatBoard = data.board.flat();
         const blackCount = flatBoard.filter(cell => cell === 1).length;
         const whiteCount = flatBoard.filter(cell => cell === 2).length;
-        const winningColour = blackCount > whiteCount ? "Black" : "White";
+        const winner = blackCount > whiteCount ? "Black" : "White";
 
         if (blackCount !== whiteCount) {
-            status.textContent = `${winningColour} wins!\n${blackCount}-${whiteCount}`;
+            status.textContent = `${winner} wins!\n${blackCount}-${whiteCount}`;
         } else {
             status.textContent = `It's a draw!\n${blackCount}-${whiteCount}`;
         }
@@ -139,6 +160,16 @@ async function handleCellClick(row, col) {
     renderBoard(data);
 
     if (data.game_over) {
+        window.location.href = `/archive/${gameId}`;
+    }
+}
+
+async function handleResign() {
+    const response = await fetch(`/api/game/${gameId}/resign`, {
+        method: "POST",
+    });
+
+    if (response.ok) {
         window.location.href = `/archive/${gameId}`;
     }
 }
