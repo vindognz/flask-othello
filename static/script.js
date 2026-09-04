@@ -1,16 +1,18 @@
 function getGameId() {
     const parts = window.location.pathname.split("/");
-    return parts[parts.length - 1]; // last segment of the path
+    return parts[parts.length - 1];
 }
 
 const gameId = getGameId();
+const isArchive = window.location.pathname.startsWith("/archive/");
 
 if (!gameId) {
     document.getElementById("status").textContent = "No game ID in URL (you monkey)";
 }
 
 async function fetchGameState() {
-    const response = await fetch(`/api/game/${gameId}`);
+    const url = isArchive ? `/api/archive/${gameId}` : `/api/game/${gameId}`;
+    const response = await fetch(url);
     const data = await response.json();
 
     if (!response.ok) {
@@ -18,22 +20,24 @@ async function fetchGameState() {
         return;
     }
 
-    renderBoard(data);
+    if (isArchive) {
+        renderArchive(data);
+    } else {
+        renderBoard(data);
+    }
 }
 
-function renderBoard(data) {
-    // reminder: data.board is an 8x8 array of numbers: 0 = empty, 1 = black, 2 = white
+function renderCells(board, lastMove, legalMoves, clickable) {
+    // shared cell-drawing logic used by both live games and archives
     const container = document.getElementById("container");
-    container.innerHTML = ""; // wipe the old container
-
-    const isMyTurn = data.your_colour === data.current_player;
+    container.innerHTML = "";
 
     for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
-            const cellValue = data.board[row][col];
+            const cellValue = board[row][col];
 
-            const cell = document.createElement("div"); // makes a new div
-            cell.className = "cell"; // give it a css class so we can style all cells
+            const cell = document.createElement("div");
+            cell.className = "cell";
 
             if (cellValue === 1) {
                 cell.classList.add("black");
@@ -41,25 +45,45 @@ function renderBoard(data) {
                 cell.classList.add("white");
             }
 
-            if (data.last_move && row === data.last_move[0] && col === data.last_move[1]) {
+            if (lastMove && row === lastMove[0] && col === lastMove[1]) {
                 cell.classList.add("last-move");
             }
 
-            // is this cell a legal move, AND is it actually my turn?
-            const isLegal = data.current_legal_moves.some(
-                (move) => move[0] === row && move[1] === col
-            );
-
-            if (isLegal && isMyTurn) {
-                cell.classList.add("legal-move");
-                cell.addEventListener("click", () => handleCellClick(row, col));
+            if (clickable) {
+                const isLegal = legalMoves.some(
+                    (move) => move[0] === row && move[1] === col
+                );
+                if (isLegal) {
+                    cell.classList.add("legal-move");
+                    cell.addEventListener("click", () => handleCellClick(row, col));
+                }
             }
 
             container.appendChild(cell); // add this cell to the grid container
         }
     }
+}
 
+function renderBoard(data) {
+    const isMyTurn = data.your_colour === data.current_player;
+    const canClick = data.both_joined && isMyTurn && !data.game_over;
+
+    renderCells(data.board, data.last_move, data.current_legal_moves, canClick);
     updateStatus(data);
+}
+
+function renderArchive(data) {
+    renderCells(data.board, data.last_move, [], false);
+
+    const status = document.getElementById("status");
+    const { black_count, white_count } = data;
+
+    if (black_count === white_count) {
+        status.textContent = `Archived game — draw, ${black_count}-${white_count}`;
+    } else {
+        const winner = black_count > white_count ? "Black" : "White";
+        status.textContent = `Archived game — ${winner} won, ${black_count}-${white_count}`;
+    }
 }
 
 function updateStatus(data) {
@@ -67,19 +91,16 @@ function updateStatus(data) {
 
     if (data.game_over) {
         const flatBoard = data.board.flat();
-
         const blackCount = flatBoard.filter(cell => cell === 1).length;
         const whiteCount = flatBoard.filter(cell => cell === 2).length;
-
         const winningColour = blackCount > whiteCount ? "Black" : "White";
 
-        if (blackCount != whiteCount) {
-            status.textContent = `${winningColour} wins!\n${blackCount}-${whiteCount}`
+        if (blackCount !== whiteCount) {
+            status.textContent = `${winningColour} wins!\n${blackCount}-${whiteCount}`;
         } else {
-            status.textContent = `It's a draw!\n${blackCount}-${whiteCount}`
+            status.textContent = `It's a draw!\n${blackCount}-${whiteCount}`;
         }
-
-        return
+        return;
     }
 
     if (data.your_colour === null) {
@@ -97,7 +118,7 @@ function updateStatus(data) {
             status.textContent = `You're ${yourColourName}. Waiting for opponent to move...`;
         }
     } else {
-        status.textContent = `You're ${yourColourName}. Waiting for opponent to join...`
+        status.textContent = `You're ${yourColourName}. Waiting for opponent to join...`;
     }
 }
 
@@ -116,8 +137,14 @@ async function handleCellClick(row, col) {
     }
 
     renderBoard(data);
+
+    if (data.game_over) {
+        window.location.href = `/archive/${gameId}`;
+    }
 }
 
-fetchGameState(); // load immediately on page load
+fetchGameState();
 
-setInterval(fetchGameState, 1500); // then re-fetch every 1.5s to catch opponent moves
+if (!isArchive) {
+    setInterval(fetchGameState, 1500);
+}

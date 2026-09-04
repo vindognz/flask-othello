@@ -1,6 +1,6 @@
 """ Flask backend for FlaskOthello """
 
-from flask import Flask, jsonify, request, session, render_template
+from flask import Flask, jsonify, request, session, render_template, redirect
 import secrets
 
 from board import OthelloBoard, BLACK, WHITE
@@ -12,7 +12,8 @@ app.secret_key = secrets.token_hex(32)
 # Constants
 GAME_ID_LENGTH = 4
 
-games = {} # game_id -> {"board": OthelloBoard, "black_session": str|None, "white_session": str|None}
+games = {}     # game_id -> {"board": OthelloBoard, "black_session": str|None, "white_session": str|None}
+archives = {}  # game_id -> {"board": list, "black": int, "white": int}  (final, read-only state)
 
 def get_or_create_player_id() -> str:
     """ Return this browser's player_id, or create one if needed. """
@@ -37,6 +38,20 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined):
         "last_move": list(board.last_move) if board.last_move else None,
         "game_over": board.game_over,
     }
+
+def archive_game(game_id, board: OthelloBoard):
+    """ Archive a completed game's state and delete it's entry in games """
+    black_count = sum(row.count(BLACK) for row in board.board)
+    white_count = sum(row.count(WHITE) for row in board.board)
+
+    archives[game_id] = {
+        "board": board.board,
+        "black_count": black_count,
+        "white_count": white_count,
+        "last_move": list(board.last_move) if board.last_move else None,
+    }
+
+    del games[game_id]
 
 
 @app.route("/api/game/new", methods=['POST'])
@@ -69,19 +84,14 @@ def new_game():
 
 @app.route("/api/game/<game_id>", methods=['GET'])
 def get_game(game_id):
-    if game_id in games:
-        game = games[game_id]
-    else:
+    if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
 
+    game = games[game_id]
     board: OthelloBoard = game["board"]
 
     player_id = get_or_create_player_id()
     your_colour = None
-
-    # if the player is not holding a seat
-        # if a seat is empty
-            # CLAIM
 
     if game["white_session"] != player_id and game["black_session"] != player_id:
         if game["white_session"] is None:
@@ -94,8 +104,6 @@ def get_game(game_id):
         your_colour = WHITE
     elif game["black_session"] == player_id:
         your_colour = BLACK
-    else:
-        your_colour = None
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
 
@@ -103,10 +111,10 @@ def get_game(game_id):
 
 @app.route("/api/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
-    if game_id in games:
-        game = games[game_id]
-    else:
+    if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
+
+    game = games[game_id]
 
     if game["black_session"] is None or game["white_session"] is None:
         return jsonify({"error": "Waiting for both players to join"}), 403
@@ -155,11 +163,37 @@ def make_move(game_id):
         else:
             board.pass_turn()
 
+    if board.game_over:
+        response = jsonify(serialize_game(board, player_colour, True))
+        archive_game(game_id, board)
+        return response
+
     both_joined = game["black_session"] is not None and game["white_session"] is not None
     return jsonify(serialize_game(board, player_colour, both_joined))
 
+@app.route("/api/archive/<game_id>", methods=['GET'])
+def get_archive(game_id):
+    if game_id not in archives:
+        return jsonify({"error": "Archive not found"}), 404
+
+    archived = archives[game_id]
+    return jsonify({
+        "board": archived["board"],
+        "black_count": archived["black_count"],
+        "white_count": archived["white_count"],
+        "last_move": archived["last_move"],
+    })
+
 @app.route("/game/<game_id>", methods=['GET'])
 def serve_game_page(game_id):
+    if game_id in archives:
+        return redirect(f"/archive/{game_id}")
+    return render_template("index.html")
+
+@app.route("/archive/<game_id>", methods=['GET'])
+def serve_archive_page(game_id):
+    if game_id not in archives:
+        return "Archive not found", 404
     return render_template("index.html")
 
 @app.route("/", methods=['GET'])
