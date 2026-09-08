@@ -161,6 +161,24 @@ async function handleCellClick(row, col) {
 
     if (data.game_over) {
         window.location.href = `/archive/${gameId}`;
+        return;
+    }
+
+    // is it now AI's turn?
+    if (data.opponent_is_ai && data.your_colour !== data.current_player) {
+        document.getElementById("status").textContent = "AI is thinking...";
+
+        const aiResponse = await fetch(`/api/game/${gameId}/ai-move`, {
+            method: "POST"
+        });
+        const aiData = await aiResponse.json();
+
+        if (aiResponse.ok) {
+            renderBoard(aiData);
+            if (aiData.game_over) {
+                window.location.href = `/archive/${gameId}`
+            }
+        }
     }
 }
 

@@ -21,13 +21,45 @@ def get_or_create_player_id() -> str:
         session["player_id"] = secrets.token_hex(8)
     return session["player_id"]
 
+def resolve_player(game_id):
+    """ Looks up the game and the caller's colour.
+        Returns (game, board, player_colour) on success,
+        or      (None, None, error_response) on failure.
+    """
+
+    if game_id not in games:
+        return None, None, (jsonify({"error": "Game not found"}), 404)
+
+    game = games[game_id]
+    board = game["board"]
+    player = get_or_create_player_id()
+
+    player_colour = None
+    if game["white_session"] == player:
+        player_colour = WHITE
+    elif game["black_session"] == player:
+        player_colour = BLACK
+
+    if not player_colour:
+        return None, None, (jsonify({"error": "Spectators can't do that"}), 403)
+
+    return game,board, player_colour
+
+def opponent_is_ai(game, your_colour):
+    """ Returns True if the seat opposite to your_colour is controlled by the AI. """
+    if your_colour is None:
+        return False
+
+    opponent_seat = game["white_session"] if your_colour == BLACK else game["black_session"]
+    return get_ai_depth(opponent_seat) is not None
+
 def get_ai_depth(session_value):
     """ Return AI depth if this seat is AI-controlled, else None. """
     if isinstance(session_value, str) and session_value.startswith("AI:"):
         return int(session_value.split(":")[1].strip())
     return None
 
-def serialize_game(board: OthelloBoard, your_colour, both_joined):
+def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai):
     """ Build the JSON response shared by /game and /move """
     return {
         "board": board.board,
@@ -37,6 +69,7 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined):
         "both_joined": both_joined,
         "last_move": list(board.last_move) if board.last_move else None,
         "game_over": board.game_over,
+        "opponent_is_ai": opponent_ai
     }
 
 def archive_game(game_id, board: OthelloBoard, resigned_colour=None):
@@ -131,33 +164,19 @@ def get_game(game_id):
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
 
-    if both_joined:
+    if both_joined and board.last_move is None:
         play_ai_turns(game_id, game, board)
 
-    return jsonify(serialize_game(board, your_colour, both_joined))
+    return jsonify(serialize_game(board, your_colour, both_joined, opponent_is_ai(game, your_colour)))
 
 @app.route("/api/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
-    if game_id not in games:
-        return jsonify({"error": "Game not found"}), 404
-
-    game = games[game_id]
+    game, board, player_colour = resolve_player(game_id)
+    if game is None:
+        return player_colour # error tuple
 
     if game["black_session"] is None or game["white_session"] is None:
         return jsonify({"error": "Waiting for both players to join"}), 403
-
-    board: OthelloBoard = game["board"]
-
-    player = get_or_create_player_id()
-    player_colour = None
-
-    if game["white_session"] == player:
-        player_colour = WHITE
-    elif game["black_session"] == player:
-        player_colour = BLACK
-
-    if not player_colour:
-        return jsonify({"error": "Spectators can't make moves"}), 403
 
     if not player_colour == board.current_player:
         return jsonify({"error": "Not your turn"}), 403
@@ -171,34 +190,31 @@ def make_move(game_id):
 
     try:
         board.make_move(row, col)
+        if board.game_over:
+            archive_game(game_id, board)
     except ValueError:
         return jsonify({"error": "Illegal move!"}), 403
     except TypeError:
         return jsonify({"error": "row/col must be integers"}), 400
 
-    play_ai_turns(game_id, game, board)
-
     both_joined = game["black_session"] is not None and game["white_session"] is not None
-    return jsonify(serialize_game(board, player_colour, both_joined))
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour)))
+
+@app.route("/api/game/<game_id>/ai-move", methods=['POST'])
+def ai_move(game_id):
+    game, board, player_colour = resolve_player(game_id)
+    if game is None:
+        return player_colour # error tuple
+
+    play_ai_turns(game_id, game, board)
+    both_joined = game["black_session"] is not None and game["white_session"] is not None
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour)))
 
 @app.route("/api/game/<game_id>/resign", methods=['POST'])
 def resign(game_id):
-    if game_id not in games:
-        return jsonify({"error": "Game not found"}), 404
-
-    game = games[game_id]
-    board: OthelloBoard = game["board"]
-
-    player = get_or_create_player_id()
-    player_colour = None
-
-    if game["white_session"] == player:
-        player_colour = WHITE
-    elif game["black_session"] == player:
-        player_colour = BLACK
-
-    if not player_colour:
-        return jsonify({"error": "Spectators can't resign"}), 403
+    game, board, player_colour = resolve_player(game_id)
+    if game is None:
+        return player_colour # error tuple
 
     archive_game(game_id, board, resigned_colour=player_colour)
     return jsonify({"status": "resigned"}), 200
