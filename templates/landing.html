@@ -18,6 +18,12 @@
         <p>Play as:</p>
         <button onclick="createGame('black')">Black</button>
         <button onclick="createGame('white')">White</button>
+
+        <div id="join-section" style="display: none;">
+            <p id="code-error" style="display: none;">Invalid game code.</p>
+            <input type="text" id="join-code" placeholder="Enter game code to join">
+            <button onclick="joinGame()">Join</button>
+        </div>
     </div>
 
     <script>
@@ -27,6 +33,10 @@
             chosenOpponent = type;
             document.getElementById("opponent-choice").style.display = "none";
             document.getElementById("colour-choice").style.display = "block";
+
+            if (type == 'human') {
+                document.getElementById("join-section").style.display = "block";
+            }
         }
 
         async function createGame(colour) {
@@ -37,6 +47,20 @@
             });
             const data = await response.json();
             window.location.href = `/game/${data.game_id}`;
+        }
+
+        async function joinGame() {
+            const code = document.getElementById("join-code").value.trim();
+            const game = await fetch(`/api/game/${code}`);
+
+            if (code && game.ok) {
+                window.location.href = `/game/${code}`;
+            } else {
+                document.getElementById("code-error").style.display = "block";
+                setTimeout(() => {
+                    document.getElementById("code-error").style.display = "none";
+                }, 5000);
+            }
         }
     </script>
 </body>

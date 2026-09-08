@@ -54,6 +54,29 @@ def archive_game(game_id, board: OthelloBoard, resigned_colour=None):
 
     del games[game_id]
 
+def play_ai_turns(game_id, game, board: OthelloBoard):
+    """ Play AI turns until a human's turn, or the game ends.
+        Archives the game and returns True if it ended during this call.
+    """
+
+    while not board.game_over:
+        current_seat = game["white_session"] if board.current_player == WHITE else game["black_session"]
+        depth = get_ai_depth(current_seat)
+        if depth is None:
+            break # human turn. stop now.
+
+        ai = OthelloAI(depth=depth)
+        ai_move = ai.get_best_move(board, board.current_player)
+        if ai_move is not None:
+            board.make_move(*ai_move)
+        else:
+            board.pass_turn()
+
+    if board.game_over:
+        archive_game(game_id, board)
+        return True
+    return False
+
 
 @app.route("/api/game/new", methods=['POST'])
 def new_game():
@@ -108,6 +131,9 @@ def get_game(game_id):
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
 
+    if both_joined:
+        play_ai_turns(game_id, game, board)
+
     return jsonify(serialize_game(board, your_colour, both_joined))
 
 @app.route("/api/game/<game_id>/move", methods=['POST'])
@@ -150,24 +176,7 @@ def make_move(game_id):
     except TypeError:
         return jsonify({"error": "row/col must be integers"}), 400
 
-    # let the AI play
-    while not board.game_over:
-        current_seat = game["white_session"] if board.current_player == WHITE else game["black_session"]
-        depth = get_ai_depth(current_seat)
-        if depth is None:
-            break  # it's a human's turn, stop here
-
-        ai = OthelloAI(depth=depth)
-        ai_move = ai.get_best_move(board, board.current_player)
-        if ai_move is not None:
-            board.make_move(*ai_move)
-        else:
-            board.pass_turn()
-
-    if board.game_over:
-        response = jsonify(serialize_game(board, player_colour, True))
-        archive_game(game_id, board)
-        return response
+    play_ai_turns(game_id, game, board)
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
     return jsonify(serialize_game(board, player_colour, both_joined))
