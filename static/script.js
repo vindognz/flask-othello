@@ -8,6 +8,7 @@ const isArchive = window.location.pathname.startsWith("/archive/");
 
 if (!gameId) {
     document.getElementById("status").textContent = "No game ID in URL (you monkey)";
+    // i lowkey don't know if this is even a possible case LMAO
 }
 
 async function fetchGameState() {
@@ -80,9 +81,15 @@ function renderBoard(data) {
     updateStatus(data);
 
     if (data.your_colour !== null && data.both_joined) {
-        document.getElementById("resign-btn").style.display = "";
+        document.getElementById("game-buttons").style.display = "";
     } else {
-        document.getElementById("resign-btn").style.display = "none";
+        document.getElementById("game-buttons").style.display = "none";
+    }
+
+    if (data.draw_offered_by !== null && data.draw_offered_by !== data.your_colour) {
+        document.getElementById("draw-popup").style.display = "";
+    } else {
+        document.getElementById("draw-popup").style.display = "none";
     }
 }
 
@@ -93,11 +100,16 @@ function renderArchive(data) {
 
     if (data.resigned_colour) {
         const winner = data.resigned_colour === 1 ? "White" : "Black";
-        status.textContent = `Archived game - ${winner} won (by resignation)`
-        return
+        status.textContent = `Archived game - ${winner} won (by resignation)`;
+        return;
     }
 
     const { black_count, white_count } = data;
+
+    if (data.agreed_draw) {
+        status.textContent = `Archived game - draw by agreement, ${black_count}-${white_count}`
+        return;
+    }
 
     if (black_count === white_count) {
         status.textContent = `Archived game — draw, ${black_count}-${white_count}`;
@@ -106,6 +118,14 @@ function renderArchive(data) {
         status.textContent = `Archived game — ${winner} won, ${black_count}-${white_count}`;
     }
 }
+
+const opponentThinkingMsg = "Opponent is thinking...";
+const aiThinkingMsg = "AI is thinking...";
+const yourTurnMsg = "Your turn!"; 
+
+const drawOfferedWaitingMsg = "Waiting for opponent's response...";
+const drawDeclinedMsg = "Your draw offer was declined.";
+const drawMessages = [drawOfferedWaitingMsg, drawDeclinedMsg]
 
 function updateStatus(data) {
     const status = document.getElementById("status");
@@ -132,14 +152,19 @@ function updateStatus(data) {
     const yourColourName = data.your_colour === 1 ? "Black" : "White";
     const isMyTurn = data.your_colour === data.current_player;
 
-    if (data.both_joined) {
-        if (isMyTurn) {
-            status.textContent = `You're ${yourColourName}. Your turn!`;
-        } else {
-            status.textContent = `You're ${yourColourName}. Waiting for opponent to move...`;
+    if (!data.both_joined) {
+        status.textContent = `You're ${yourColourName}. Waiting for opponent to join...`;
+        return;
+    }
+
+    if (!isMyTurn && !data.opponent_is_ai) {
+        if (!drawMessages.includes(status.textContent)) {
+            status.textContent = opponentThinkingMsg;
         }
     } else {
-        status.textContent = `You're ${yourColourName}. Waiting for opponent to join...`;
+        if (!drawMessages.includes(status.textContent)) {
+            status.textContent = yourTurnMsg;
+        }
     }
 }
 
@@ -166,7 +191,7 @@ async function handleCellClick(row, col) {
 
     // is it now AI's turn?
     if (data.opponent_is_ai && data.your_colour !== data.current_player) {
-        document.getElementById("status").textContent = "AI is thinking...";
+        document.getElementById("status").textContent = aiThinkingMsg;
 
         const aiResponse = await fetch(`/api/game/${gameId}/ai-move`, {
             method: "POST"
@@ -190,6 +215,68 @@ async function handleResign() {
     if (response.ok) {
         window.location.href = `/archive/${gameId}`;
     }
+}
+
+async function handleOfferDraw() {
+    const response = await fetch(`/api/game/${gameId}/offer-draw`, {
+        method: "POST",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+        document.getElementById("status").textContent = data.error;
+        return;
+    }
+
+    if (data.status === "draw") {
+        window.location.href = `/archive/${gameId}`;
+        return;
+    }
+
+    renderBoard(data);
+
+    if (data.opponent_is_ai) {
+        document.getElementById("status").textContent = drawOfferedWaitingMsg;
+
+        const delay = 2500 + Math.random() * 5000;
+        setTimeout(async () => {
+            const followUp = await fetch(`/api/game/${gameId}`);
+            const followUpData = await followUp.json();
+
+            if (followUpData.game_over) {
+                window.location.href = `/archive/${gameId}`;
+            } else {
+                renderBoard(followUpData);
+                document.getElementById("status").textContent = drawDeclinedMsg;
+            }
+        }, delay);
+
+        setTimeout(() => {
+            document.getElementById("status").textContent = "";
+            updateStatus(data);
+        }, 3000);
+    }
+}
+
+async function handleRespondDraw(accept) {
+    const response = await fetch(`/api/game/${gameId}/respond-draw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accept: accept }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+        document.getElementById("status").textContent = data.error;
+        return;
+    }
+
+    if (data.status == "draw") {
+        window.location.href = `/archive/${gameId}`;
+        return;
+    }
+
+    fetchGameState();
 }
 
 fetchGameState();

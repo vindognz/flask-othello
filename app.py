@@ -43,7 +43,7 @@ def resolve_player(game_id):
     if not player_colour:
         return None, None, (jsonify({"error": "Spectators can't do that"}), 403)
 
-    return game,board, player_colour
+    return game, board, player_colour
 
 def opponent_is_ai(game, your_colour):
     """ Returns True if the seat opposite to your_colour is controlled by the AI. """
@@ -59,8 +59,8 @@ def get_ai_depth(session_value):
         return int(session_value.split(":")[1].strip())
     return None
 
-def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai):
-    """ Build the JSON response shared by /game and /move """
+def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai, draw_offered_by):
+    """ Build the JSON response shared by /game, /move and /ai-move """
     return {
         "board": board.board,
         "current_player": board.current_player,
@@ -69,11 +69,13 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai):
         "both_joined": both_joined,
         "last_move": list(board.last_move) if board.last_move else None,
         "game_over": board.game_over,
-        "opponent_is_ai": opponent_ai
+        "opponent_is_ai": opponent_ai,
+        "draw_offered_by": draw_offered_by
     }
 
-def archive_game(game_id, board: OthelloBoard, resigned_colour=None):
+def archive_game(game_id, board: OthelloBoard, resigned_colour=None, agreed_draw=False):
     """ Archive a completed game's state and delete it's entry in games """
+    print("[archive_game()] i am archiving the game")
     black_count = sum(row.count(BLACK) for row in board.board)
     white_count = sum(row.count(WHITE) for row in board.board)
 
@@ -83,6 +85,7 @@ def archive_game(game_id, board: OthelloBoard, resigned_colour=None):
         "white_count": white_count,
         "last_move": list(board.last_move) if board.last_move else None,
         "resigned_colour": resigned_colour,
+        "agreed_draw": agreed_draw,
     }
 
     del games[game_id]
@@ -91,12 +94,11 @@ def play_ai_turns(game_id, game, board: OthelloBoard):
     """ Play AI turns until a human's turn, or the game ends.
         Archives the game and returns True if it ended during this call.
     """
-
     while not board.game_over:
         current_seat = game["white_session"] if board.current_player == WHITE else game["black_session"]
         depth = get_ai_depth(current_seat)
         if depth is None:
-            break # human turn. stop now.
+            break
 
         ai = OthelloAI(depth=depth)
         ai_move = ai.get_best_move(board, board.current_player)
@@ -109,6 +111,28 @@ def play_ai_turns(game_id, game, board: OthelloBoard):
         archive_game(game_id, board)
         return True
     return False
+
+def check_draw_offer(game_id, game, board):
+    """ If there's a pending draw offer and the opponent is AI, let it pick """
+    if game["draw_offered_by"] is None:
+        return False
+
+    offerer_colour = game["draw_offered_by"]
+    ai_colour = WHITE if offerer_colour == BLACK else BLACK
+    ai_seat = game["white_session"] if ai_colour == WHITE else game["black_session"]
+
+    if get_ai_depth(ai_seat) is None:
+        return False # opponent isn't AI so there's nothing to auto decide
+
+    ai_count = sum(row.count(ai_colour) for row in board.board)
+    opponent_count = sum(row.count(offerer_colour) for row in board.board)
+
+    if ai_count < opponent_count:
+        archive_game(game_id, board, agreed_draw=True)
+        return True
+    else:
+        game["draw_offered_by"] = None
+        return False
 
 
 @app.route("/api/game/new", methods=['POST'])
@@ -124,7 +148,8 @@ def new_game():
     games[game_id] = {
         "board": OthelloBoard(),
         "black_session": None,
-        "white_session": None
+        "white_session": None,
+        "draw_offered_by": None
     }
 
     if host_colour == "white":
@@ -164,10 +189,14 @@ def get_game(game_id):
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
 
-    if both_joined and board.last_move is None:
-        play_ai_turns(game_id, game, board)
+    if both_joined:
+        if check_draw_offer(game_id, game, board):
+            return jsonify(serialize_game(board, your_colour, both_joined, opponent_is_ai(game, your_colour), None))
 
-    return jsonify(serialize_game(board, your_colour, both_joined, opponent_is_ai(game, your_colour)))
+        if board.last_move is None:
+            play_ai_turns(game_id, game, board)
+
+    return jsonify(serialize_game(board, your_colour, both_joined, opponent_is_ai(game, your_colour), game["draw_offered_by"]))
 
 @app.route("/api/game/<game_id>/move", methods=['POST'])
 def make_move(game_id):
@@ -198,7 +227,7 @@ def make_move(game_id):
         return jsonify({"error": "row/col must be integers"}), 400
 
     both_joined = game["black_session"] is not None and game["white_session"] is not None
-    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour)))
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour), game["draw_offered_by"]))
 
 @app.route("/api/game/<game_id>/ai-move", methods=['POST'])
 def ai_move(game_id):
@@ -208,7 +237,7 @@ def ai_move(game_id):
 
     play_ai_turns(game_id, game, board)
     both_joined = game["black_session"] is not None and game["white_session"] is not None
-    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour)))
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour), game["draw_offered_by"]))
 
 @app.route("/api/game/<game_id>/resign", methods=['POST'])
 def resign(game_id):
@@ -218,6 +247,46 @@ def resign(game_id):
 
     archive_game(game_id, board, resigned_colour=player_colour)
     return jsonify({"status": "resigned"}), 200
+
+@app.route("/api/game/<game_id>/respond-draw", methods=['POST'])
+def respond_draw(game_id):
+    game, board, player_colour = resolve_player(game_id)
+    if game is None:
+        return player_colour # error tuple
+
+    if game["draw_offered_by"] is None:
+        return jsonify({"error": "No draw offer pending"}), 409
+
+    if game["draw_offered_by"] == player_colour:
+        return jsonify({"error": "You can't respond to your own offer"}), 403
+
+    data = request.get_json(silent=True) or {}
+    accept = data.get("accept")
+
+    if accept:
+        archive_game(game_id, board, agreed_draw=True)
+        return jsonify({"status": "draw"}), 200
+
+    game["draw_offered_by"] = None
+    both_joined = game["black_session"] is not None and game["white_session"] is not None
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour), game["draw_offered_by"]))
+
+@app.route("/api/game/<game_id>/offer-draw", methods=['POST'])
+def offer_draw(game_id):
+    game, board, player_colour = resolve_player(game_id)
+    if game is None:
+        return player_colour # error tuple
+
+    if game["draw_offered_by"] is None:
+        game["draw_offered_by"] = player_colour
+    elif game["draw_offered_by"] == player_colour:
+        return jsonify({"error": "You already have an unfulfilled draw request"}), 409
+    else: # opponent already offered (mutual agreement)
+        archive_game(game_id, board, agreed_draw=True)
+        return jsonify({"status": "draw"}), 200
+
+    both_joined = game["black_session"] is not None and game["white_session"] is not None
+    return jsonify(serialize_game(board, player_colour, both_joined, opponent_is_ai(game, player_colour), game["draw_offered_by"]))
 
 @app.route("/api/archive/<game_id>", methods=['GET'])
 def get_archive(game_id):
@@ -230,7 +299,8 @@ def get_archive(game_id):
         "black_count": archived["black_count"],
         "white_count": archived["white_count"],
         "last_move": archived["last_move"],
-        "resigned_colour": archived["resigned_colour"]
+        "resigned_colour": archived["resigned_colour"],
+        "agreed_draw": archived["agreed_draw"]
     })
 
 @app.route("/game/<game_id>", methods=['GET'])
