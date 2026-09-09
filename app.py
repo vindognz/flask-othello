@@ -75,7 +75,6 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai, d
 
 def archive_game(game_id, board: OthelloBoard, resigned_colour=None, agreed_draw=False):
     """ Archive a completed game's state and delete it's entry in games """
-    print("[archive_game()] i am archiving the game")
     black_count = sum(row.count(BLACK) for row in board.board)
     white_count = sum(row.count(WHITE) for row in board.board)
 

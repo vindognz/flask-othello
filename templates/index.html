@@ -12,15 +12,15 @@
     <div id="container"></div>
 
     <div id="game-buttons" style="display: none;">
-        <button id="resign-btn" onclick="handleResign()">Resign</button>
-        <button id="offer-draw-btn" onclick="handleOfferDraw()">Offer Draw</button>
+        <button id="resign-btn">Resign</button>
+        <button id="offer-draw-btn">Offer Draw</button>
 
         <div id="draw-popup" style="display: none;">
             <p>Your opponent offered a draw.</p>
-            <button onclick="handleRespondDraw(true)">Accept</button>
-            <button onclick="handleRespondDraw(false)">Decline</button>
+            <button id="accept-draw-btn">Accept</button>
+            <button id="decline-draw-btn">Decline</button>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

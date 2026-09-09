@@ -1,3 +1,11 @@
+import {
+    opponentThinkingMsg,
+    aiThinkingMsg,
+    yourTurnMsg,
+    drawOfferedWaitingMsg,
+    drawDeclinedMsg,
+} from "./strings.js";
+
 function getGameId() {
     const parts = window.location.pathname.split("/");
     return parts[parts.length - 1];
@@ -73,7 +81,11 @@ function renderCells(board, lastMove, legalMoves, clickable) {
     }
 }
 
-function renderBoard(data) {
+function renderBoard(data, clearOverride = false) {
+    if (clearOverride) {
+        statusOverrideActive = false;
+    }
+
     const isMyTurn = data.your_colour === data.current_player;
     const canClick = data.both_joined && isMyTurn && !data.game_over;
 
@@ -119,13 +131,12 @@ function renderArchive(data) {
     }
 }
 
-const opponentThinkingMsg = "Opponent is thinking...";
-const aiThinkingMsg = "AI is thinking...";
-const yourTurnMsg = "Your turn!"; 
+let statusOverrideActive = false;
 
-const drawOfferedWaitingMsg = "Waiting for opponent's response...";
-const drawDeclinedMsg = "Your draw offer was declined.";
-const drawMessages = [drawOfferedWaitingMsg, drawDeclinedMsg]
+function setStatus(text, isOverride = false) {
+    document.getElementById("status").textContent = text;
+    statusOverrideActive = isOverride;
+}
 
 function updateStatus(data) {
     const status = document.getElementById("status");
@@ -144,6 +155,10 @@ function updateStatus(data) {
         return;
     }
 
+    if (statusOverrideActive) {
+        return;
+    }
+
     if (data.your_colour === null) {
         status.textContent = "You're spectating.";
         return;
@@ -158,13 +173,9 @@ function updateStatus(data) {
     }
 
     if (!isMyTurn && !data.opponent_is_ai) {
-        if (!drawMessages.includes(status.textContent)) {
-            status.textContent = opponentThinkingMsg;
-        }
+        status.textContent = opponentThinkingMsg;
     } else {
-        if (!drawMessages.includes(status.textContent)) {
-            status.textContent = yourTurnMsg;
-        }
+        status.textContent = yourTurnMsg;
     }
 }
 
@@ -178,7 +189,8 @@ async function handleCellClick(row, col) {
     const data = await response.json();
 
     if (!response.ok) {
-        document.getElementById("status").textContent = data.error;
+        // document.getElementById("status").textContent = data.error;
+        setStatus(data.error);
         return;
     }
 
@@ -191,7 +203,8 @@ async function handleCellClick(row, col) {
 
     // is it now AI's turn?
     if (data.opponent_is_ai && data.your_colour !== data.current_player) {
-        document.getElementById("status").textContent = aiThinkingMsg;
+        // document.getElementById("status").textContent = aiThinkingMsg;
+        setStatus(aiThinkingMsg, true);
 
         const aiResponse = await fetch(`/api/game/${gameId}/ai-move`, {
             method: "POST"
@@ -199,7 +212,7 @@ async function handleCellClick(row, col) {
         const aiData = await aiResponse.json();
 
         if (aiResponse.ok) {
-            renderBoard(aiData);
+            renderBoard(aiData, true);
             if (aiData.game_over) {
                 window.location.href = `/archive/${gameId}`
             }
@@ -217,6 +230,10 @@ async function handleResign() {
     }
 }
 
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function handleOfferDraw() {
     const response = await fetch(`/api/game/${gameId}/offer-draw`, {
         method: "POST",
@@ -224,7 +241,8 @@ async function handleOfferDraw() {
     const data = await response.json();
 
     if (!response.ok) {
-        document.getElementById("status").textContent = data.error;
+        // document.getElementById("status").textContent = data.error;
+        setStatus(data.error);
         return;
     }
 
@@ -235,27 +253,28 @@ async function handleOfferDraw() {
 
     renderBoard(data);
 
-    if (data.opponent_is_ai) {
-        document.getElementById("status").textContent = drawOfferedWaitingMsg;
-
-        const delay = 2500 + Math.random() * 5000;
-        setTimeout(async () => {
-            const followUp = await fetch(`/api/game/${gameId}`);
-            const followUpData = await followUp.json();
-
-            if (followUpData.game_over) {
-                window.location.href = `/archive/${gameId}`;
-            } else {
-                renderBoard(followUpData);
-                document.getElementById("status").textContent = drawDeclinedMsg;
-            }
-        }, delay);
-
-        setTimeout(() => {
-            document.getElementById("status").textContent = "";
-            updateStatus(data);
-        }, 3000);
+    if (!data.opponent_is_ai) {
+        return;
     }
+
+    setStatus(drawOfferedWaitingMsg, true);
+
+    const delay = 2500 + Math.random() * 5000;
+    await sleep(delay);
+
+    const followUp = await fetch(`/api/game/${gameId}`);
+    const followUpData = await followUp.json();
+
+    if (followUpData.game_over) {
+        window.location.href = `/archive/${gameId}`;
+        return;
+    }
+
+    renderBoard(followUpData);
+    setStatus(drawDeclinedMsg, true);
+
+    await sleep(3000);
+    renderBoard(followUpData, true);
 }
 
 async function handleRespondDraw(accept) {
@@ -278,6 +297,12 @@ async function handleRespondDraw(accept) {
 
     fetchGameState();
 }
+
+document.getElementById("resign-btn")?.addEventListener("click", handleResign);
+document.getElementById("offer-draw-btn")?.addEventListener("click", handleOfferDraw);
+
+document.getElementById("accept-draw-btn")?.addEventListener("click", () => handleRespondDraw(true));
+document.getElementById("decline-draw-btn")?.addEventListener("click", () => handleRespondDraw(false));
 
 fetchGameState();
 
