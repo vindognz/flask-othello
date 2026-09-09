@@ -221,6 +221,10 @@ async function handleCellClick(row, col) {
 }
 
 async function handleResign() {
+    if (!confirm("Are you sure you want to resign?")) {
+        return;
+    }
+
     const response = await fetch(`/api/game/${gameId}/resign`, {
         method: "POST",
     });
