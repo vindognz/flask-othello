@@ -47,6 +47,7 @@ class OthelloBoard:
 		self.game_over = False
 
 		self.last_move = None
+		self.last_flips = [] # for animating flips on the frontend
 
 	def __repr__(self) -> str:
 		"""
@@ -163,6 +164,7 @@ class OthelloBoard:
 
 			self.board[row][col] = self.current_player
 			self.last_move = (row, col)
+			self.last_flips = flips
 
 			for fr, fc in flips:
 				self.board[fr][fc] = self.current_player

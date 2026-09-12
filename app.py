@@ -68,6 +68,7 @@ def serialize_game(board: OthelloBoard, your_colour, both_joined, opponent_ai, d
         "current_legal_moves": list(board.get_valid_moves(board.current_player)),
         "both_joined": both_joined,
         "last_move": list(board.last_move) if board.last_move else None,
+        "last_flips": [list(f) for f in board.last_flips],
         "game_over": board.game_over,
         "opponent_is_ai": opponent_ai,
         "draw_offered_by": draw_offered_by

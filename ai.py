@@ -47,7 +47,7 @@ class OthelloAI:
         return positional_score + mobility_score * MOBILITY_WEIGHT
 
     def _copy_board(self, board: OthelloBoard):
-        new_board = OthelloBoard.__new__(OthelloBoard)
+        new_board = OthelloBoard()
         new_board.board = [row[:] for row in board.board]
         new_board.current_player = board.current_player
 

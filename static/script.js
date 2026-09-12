@@ -44,7 +44,7 @@ async function fetchGameState() {
     }
 }
 
-function renderCells(board, lastMove, legalMoves, clickable) {
+function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) {
     // shared cell-drawing logic used by both live games and archives
     const container = document.getElementById("container");
     container.innerHTML = "";
@@ -66,6 +66,13 @@ function renderCells(board, lastMove, legalMoves, clickable) {
                 cell.classList.add("last-move");
             }
 
+            const wasFlipped = flippedCells.some(
+                (pos) => pos[0] === row && pos[1] === col
+            );
+            if (wasFlipped) {
+                cell.classList.add("flipping")
+            }
+
             if (clickable) {
                 const isLegal = legalMoves.some(
                     (move) => move[0] === row && move[1] === col
@@ -81,6 +88,8 @@ function renderCells(board, lastMove, legalMoves, clickable) {
     }
 }
 
+let lastAnimatedMove = null;
+
 function renderBoard(data, clearOverride = false) {
     if (clearOverride) {
         statusOverrideActive = false;
@@ -89,7 +98,15 @@ function renderBoard(data, clearOverride = false) {
     const isMyTurn = data.your_colour === data.current_player;
     const canClick = data.both_joined && isMyTurn && !data.game_over;
 
-    renderCells(data.board, data.last_move, data.current_legal_moves, canClick);
+    const moveKey = data.last_move ? data.last_move.join(",") : null;
+    const isNewMove = moveKey !== null && moveKey !== lastAnimatedMove;
+    const flipsToAnimate = isNewMove ? data.last_flips : [];
+
+    if (isNewMove) {
+        lastAnimatedMove = moveKey;
+    }
+
+    renderCells(data.board, data.last_move, data.current_legal_moves, canClick, flipsToAnimate);
     updateStatus(data);
 
     if (data.your_colour !== null && data.both_joined) {
@@ -179,6 +196,18 @@ function updateStatus(data) {
     }
 }
 
+async function ensureMinDelay(promise, minMs) {
+    const start = Date.now();
+    const result = await promise;
+    const elapsed = Date.now() - start;
+
+    if (elapsed < minMs) {
+        await sleep(minMs - elapsed);
+    }
+
+    return result;
+}
+
 async function handleCellClick(row, col) {
     const response = await fetch(`/api/game/${gameId}/move`, {
         method: "POST",
@@ -206,9 +235,11 @@ async function handleCellClick(row, col) {
         // document.getElementById("status").textContent = aiThinkingMsg;
         setStatus(aiThinkingMsg, true);
 
-        const aiResponse = await fetch(`/api/game/${gameId}/ai-move`, {
-            method: "POST"
-        });
+        const aiResponse = await ensureMinDelay(
+            fetch(`/api/game/${gameId}/ai-move`, {
+                method: "POST"
+            }), 500
+        );
         const aiData = await aiResponse.json();
 
         if (aiResponse.ok) {
