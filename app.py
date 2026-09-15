@@ -143,7 +143,7 @@ def new_game():
     data = request.get_json(silent=True) or {}
     host_colour = data.get('host_colour')
     opponent = data.get('opponent')  # "human" or "cpu"
-    ai_depth = data.get('ai_depth', 3)  # default depth if not specified
+    ai_depth = data.get('ai_depth', 6)  # default depth if not specified
 
     game_id = secrets.token_urlsafe(GAME_ID_LENGTH)
     games[game_id] = {

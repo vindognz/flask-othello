@@ -261,7 +261,7 @@ async function handleCellClick(row, col) {
         const aiResponse = await ensureMinDelay(
             fetch(`/api/game/${gameId}/ai-move`, {
                 method: "POST"
-            }), 500
+            }), 1000
         );
         const aiData = await aiResponse.json();
 

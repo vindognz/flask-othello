@@ -66,9 +66,42 @@ class OthelloAI:
         new_board.current_player = board.current_player
         new_board.last_move = board.last_move
         new_board.last_flips = board.last_flips
-        new_board.move_history = board.move_history
+        new_board.move_history = board.move_history[:]
 
         return new_board
+
+    def _make_move_search(self, board: OthelloBoard, row, col):
+            """
+            Make a move for minimax and return the pieces that were flipped
+            Does not touch move_history, last_move, last_flips or game_over.
+            """
+            player = board.current_player
+            opponent = WHITE if player == BLACK else BLACK
+    
+            flips = []
+    
+            for dr, dc in DIRECTIONS:
+                flips += board._walk_direction(row, col, dr, dc, player, opponent)
+    
+            board.board[row][col] = player
+    
+            for fr, fc in flips:
+                board.board[fr][fc] = player
+    
+            board.current_player = opponent
+    
+            return flips
+    
+    def _undo_move_search(self, board: OthelloBoard, row, col, flips, player):
+        """
+        Undo a move made by _make_move_search()
+        """
+        board.board[row][col] = EMPTY
+
+        for fr, fc in flips:
+            board.board[fr][fc] = player
+
+        board.current_player = player
 
     def minimax(self, board: OthelloBoard, depth, player, alpha=-float('inf'), beta=float('inf')):
         """
@@ -87,6 +120,7 @@ class OthelloAI:
         if tt_entry is not None:
             self.tt_hits += 1 # DEBUG
             stored_depth, stored_score, stored_flag, stored_move = tt_entry
+            tt_move = stored_move
 
             if stored_depth >= depth:
                 if stored_flag == "EXACT":
@@ -147,10 +181,11 @@ class OthelloAI:
             valid_moves.insert(0, tt_move)
 
         for row, col in valid_moves:
-            new_board = self._copy_board(board)
-            new_board.make_move(row, col)
+            mover = board.current_player
 
-            score = self.minimax(new_board, depth - 1, player, alpha, beta)
+            flips = self._make_move_search(board, row, col)
+            score = self.minimax(board, depth - 1, player, alpha, beta)
+            self._undo_move_search(board, row, col, flips, mover)
 
             if is_maximising:
                 if score > best_score:
@@ -211,7 +246,7 @@ if __name__ == "__main__":
     import time
     import subprocess
     board = OthelloBoard()
-    ai = OthelloAI(depth=5)
+    ai = OthelloAI(depth=7)
 
     times = []
 
