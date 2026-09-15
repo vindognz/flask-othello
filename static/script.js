@@ -342,14 +342,6 @@ async function handleRespondDraw(accept) {
     fetchGameState();
 }
 
-// return jsonify({
-//     "board": replay_board.board,
-//     "last_move": list(replay_board.last_move) if replay_board.last_move else None,
-//     "step": step,
-//     "total_steps": len(move_history),
-// })
-
-// renderCells(board, lastMove, legalMoves, clickable, flippedCells = [])
 
 let currentStep = 0;
 let totalSteps = 0;
@@ -364,14 +356,68 @@ async function goToStep(step) {
     }
 
     currentStep = data.step;
-    totalSteps = data.totalSteps;
+    totalSteps = data.total_steps;
     renderCells(data.board, data.last_move, [], false);
 }
 
 document.getElementById("history-start")?.addEventListener("click", () => goToStep(0));
-document.getElementById("history-prev")?.addEventListener("click", () => goToStep(Math.max(0, currentStep - 1)));
-document.getElementById("history-next")?.addEventListener("click", () => goToStep(currentStep + 1));
 document.getElementById("history-end")?.addEventListener("click", () => goToStep(totalSteps));
+
+let holdTimer = null;
+let repeatTimer = null;
+let holding = false;
+
+function startHolding(action) {
+    if (holding) return;
+
+    holding = true;
+    action(); // one call immediately
+
+    holdTimer = setTimeout(() => {
+        repeatTimer = setInterval(async () => {
+            if (!holding) return;
+
+            await action();
+        }, 50);
+    }, 500);
+}
+
+function stopHolding() {
+    holding = false;
+
+    clearTimeout(holdTimer);
+    clearInterval(repeatTimer);
+
+    holdTimer = null;
+    repeatTimer = null;
+}
+
+const prevButton = document.getElementById("history-prev");
+const nextButton = document.getElementById("history-next");
+
+prevButton.addEventListener("pointerdown", () => {
+    startHolding(async () => {
+        if (currentStep > 0) {
+            await goToStep(currentStep - 1);
+        }
+    });
+});
+
+nextButton.addEventListener("pointerdown", () => {
+    startHolding(async () => {
+        if (currentStep < totalSteps) {
+            await goToStep(currentStep + 1);
+        }
+    });
+});
+
+prevButton.addEventListener("pointerup", stopHolding)
+prevButton.addEventListener("pointercancel", stopHolding)
+prevButton.addEventListener("pointerleave", stopHolding)
+
+nextButton.addEventListener("pointerup", stopHolding)
+nextButton.addEventListener("pointercancel", stopHolding)
+nextButton.addEventListener("pointerleave", stopHolding)
 
 document.getElementById("resign-btn")?.addEventListener("click", handleResign);
 document.getElementById("offer-draw-btn")?.addEventListener("click", handleOfferDraw);
