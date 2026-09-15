@@ -86,6 +86,7 @@ def archive_game(game_id, board: OthelloBoard, resigned_colour=None, agreed_draw
         "last_move": list(board.last_move) if board.last_move else None,
         "resigned_colour": resigned_colour,
         "agreed_draw": agreed_draw,
+        "move_history": board.move_history
     }
 
     del games[game_id]
@@ -301,6 +302,30 @@ def get_archive(game_id):
         "last_move": archived["last_move"],
         "resigned_colour": archived["resigned_colour"],
         "agreed_draw": archived["agreed_draw"]
+    })
+
+@app.route("/api/archive/<game_id>/history/<int:step>", methods=['GET'])
+def get_history_step(game_id, step):
+    if game_id not in archives:
+        return jsonify({"error": "Archive not found"}), 404
+
+    archived = archives[game_id]
+    move_history = archived["move_history"]
+
+    if step < 0 or step > len(move_history):
+        return jsonify({"error": "Invalid step"}), 400
+
+    replay_board = OthelloBoard()
+    for player, row, col in move_history[:step]:
+        if row is None:
+            continue
+        replay_board.make_move(row, col)
+
+    return jsonify({
+        "board": replay_board.board,
+        "last_move": list(replay_board.last_move) if replay_board.last_move else None,
+        "step": step,
+        "total_steps": len(move_history),
     })
 
 @app.route("/game/<game_id>", methods=['GET'])

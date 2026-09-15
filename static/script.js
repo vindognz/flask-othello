@@ -123,7 +123,16 @@ function renderBoard(data, clearOverride = false) {
 }
 
 function renderArchive(data) {
-    renderCells(data.board, data.last_move, [], false);
+    renderCells(data.board, [], [], false);
+
+    document.getElementById("history-controls").style.display = "";
+
+    fetch(`/api/archive/${gameId}/history/0`)
+        .then(res => res.json())
+        .then(historyData => {
+            totalSteps = historyData.total_steps;
+            currentStep = totalSteps;
+        });
 
     const status = document.getElementById("status");
 
@@ -332,6 +341,37 @@ async function handleRespondDraw(accept) {
 
     fetchGameState();
 }
+
+// return jsonify({
+//     "board": replay_board.board,
+//     "last_move": list(replay_board.last_move) if replay_board.last_move else None,
+//     "step": step,
+//     "total_steps": len(move_history),
+// })
+
+// renderCells(board, lastMove, legalMoves, clickable, flippedCells = [])
+
+let currentStep = 0;
+let totalSteps = 0;
+
+async function goToStep(step) {
+    const response = await fetch(`/api/archive/${gameId}/history/${step}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+        // well, crap.
+        return;
+    }
+
+    currentStep = data.step;
+    totalSteps = data.totalSteps;
+    renderCells(data.board, data.last_move, [], false);
+}
+
+document.getElementById("history-start")?.addEventListener("click", () => goToStep(0));
+document.getElementById("history-prev")?.addEventListener("click", () => goToStep(Math.max(0, currentStep - 1)));
+document.getElementById("history-next")?.addEventListener("click", () => goToStep(currentStep + 1));
+document.getElementById("history-end")?.addEventListener("click", () => goToStep(totalSteps));
 
 document.getElementById("resign-btn")?.addEventListener("click", handleResign);
 document.getElementById("offer-draw-btn")?.addEventListener("click", handleOfferDraw);

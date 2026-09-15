@@ -49,6 +49,8 @@ class OthelloBoard:
 		self.last_move = None
 		self.last_flips = [] # for animating flips on the frontend
 
+		self.move_history = []
+
 	def __repr__(self) -> str:
 		"""
 		Pretty print the board.
@@ -165,6 +167,7 @@ class OthelloBoard:
 			self.board[row][col] = self.current_player
 			self.last_move = (row, col)
 			self.last_flips = flips
+			self.move_history.append((self.current_player, row, col))
 
 			for fr, fc in flips:
 				self.board[fr][fc] = self.current_player
@@ -184,7 +187,10 @@ class OthelloBoard:
 	def pass_turn(self):
 		if self.get_valid_moves(self.current_player):
 			raise ValueError("Cannot pass while legal moves are available")
+
+		passing_player = self.current_player
 		self.current_player = self.opponent
+		self.move_history.append((passing_player, None, None))
 
 
 if __name__ == "__main__":
