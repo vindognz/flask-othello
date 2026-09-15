@@ -69,13 +69,13 @@ function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) 
                 // start the piece as its old colour
                 cell.classList.add(cellValue === 1 ? "white" : "black");
                 cell.classList.add("flipping");
-                cell.style.setProperty("--flip-delay", `${distance * 75}ms`);
+                cell.style.setProperty("--flip-delay", `${distance * 150}ms`);
 
                 // change to the new colour when the piece is edge on
                 setTimeout(() => {
                     cell.classList.remove("black", "white");
                     cell.classList.add(cellValue === 1 ? "black" : "white");
-                }, distance * 75 + 125);
+                }, distance * 150 + 125);
             } else {
                 if (cellValue === 1) {
                     cell.classList.add("black");
@@ -359,8 +359,6 @@ async function handleRespondDraw(accept) {
 let currentStep = 0;
 let totalSteps = 0;
 
-// function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) {
-
 async function goToStep(step) {
     const response = await fetch(`/api/archive/${gameId}/history/${step}`);
     const data = await response.json();
@@ -422,13 +420,13 @@ nextButton.addEventListener("pointerdown", () => {
     });
 });
 
-prevButton.addEventListener("pointerup", stopHolding);
-prevButton.addEventListener("pointercancel", stopHolding);
-prevButton.addEventListener("pointerleave", stopHolding);
+prevButton?.addEventListener("pointerup", stopHolding);
+prevButton?.addEventListener("pointercancel", stopHolding);
+prevButton?.addEventListener("pointerleave", stopHolding);
 
-nextButton.addEventListener("pointerup", stopHolding);
-nextButton.addEventListener("pointercancel", stopHolding);
-nextButton.addEventListener("pointerleave", stopHolding);
+nextButton?.addEventListener("pointerup", stopHolding);
+nextButton?.addEventListener("pointercancel", stopHolding);
+nextButton?.addEventListener("pointerleave", stopHolding);
 
 document.getElementById("resign-btn")?.addEventListener("click", handleResign);
 document.getElementById("offer-draw-btn")?.addEventListener("click", handleOfferDraw);

@@ -21,6 +21,20 @@ class OthelloAI:
         Initialize the OthelloAI object
         """
         self.depth = depth
+        self.transposition_table = {}
+
+        self.tt_hits = 0
+        self.tt_lookups = 0
+
+    def _board_key(self, board: OthelloBoard, player):
+        """
+        Returns an entry key for the transposition table
+        """
+        return (
+            tuple(tuple(row) for row in board.board),
+            board.current_player,
+            player,
+        )
 
     def evaluate(self, board: OthelloBoard, player):
         """
@@ -47,9 +61,12 @@ class OthelloAI:
         return positional_score + mobility_score * MOBILITY_WEIGHT
 
     def _copy_board(self, board: OthelloBoard):
-        new_board = OthelloBoard()
+        new_board = OthelloBoard.__new__(OthelloBoard)
         new_board.board = [row[:] for row in board.board]
         new_board.current_player = board.current_player
+        new_board.last_move = board.last_move
+        new_board.last_flips = board.last_flips
+        new_board.move_history = board.move_history
 
         return new_board
 
@@ -57,6 +74,31 @@ class OthelloAI:
         """
         I'm scared.
         """
+        key = self._board_key(board, player)
+
+        alpha_original = alpha
+        beta_original = beta
+
+        self.tt_lookups += 1 # DEBUG
+
+        tt_entry = self.transposition_table.get(key)
+        tt_move = None
+
+        if tt_entry is not None:
+            self.tt_hits += 1 # DEBUG
+            stored_depth, stored_score, stored_flag, stored_move = tt_entry
+
+            if stored_depth >= depth:
+                if stored_flag == "EXACT":
+                    return stored_score
+                elif stored_flag == "LOWER":
+                    alpha = max(alpha, stored_score)
+                elif stored_flag == "UPPER":
+                    beta = min(beta, stored_score)
+
+                if alpha >= beta:
+                    return stored_score
+
         current_player = board.current_player
         valid_moves = board.get_valid_moves(current_player)
 
@@ -65,22 +107,44 @@ class OthelloAI:
             passed_board.pass_turn()
             valid_moves = passed_board.get_valid_moves(passed_board.current_player)
 
+            # game over
             if len(valid_moves) == 0:
                 opponent = WHITE if player == BLACK else BLACK
                 player_count = sum(row.count(player) for row in board.board)
                 opponent_count = sum(row.count(opponent) for row in board.board)
-                return (player_count - opponent_count) * 10000
+
+                score = (player_count - opponent_count) * 10000
+                self.transposition_table[key] = (depth, score, "EXACT", None)
+
+                return score
+            
             if depth == 0:
-                return self.evaluate(board, player)
-            return self.minimax(passed_board, depth, player, alpha, beta)
+                score = self.evaluate(board, player)
+                self.transposition_table[key] = (depth, score, "EXACT", None)
+
+                return score
+            
+            score = self.minimax(passed_board, depth, player, alpha, beta)
+            self.transposition_table[key] = (depth, score, "EXACT", None)
+
+            return score
 
         if depth == 0:
-            return self.evaluate(board, player)
+            score = self.evaluate(board, player)
+            self.transposition_table[key] = (depth, score, "EXACT", None)
+
+            return score
 
         is_maximising = (current_player == player)
         best_score = -float('inf') if is_maximising else float('inf')
 
+        best_move = None
+
         valid_moves = sorted(valid_moves, key=lambda move: WEIGHTS[move[0]][move[1]], reverse=True)
+
+        if tt_move in valid_moves:
+            valid_moves.remove(tt_move)
+            valid_moves.insert(0, tt_move)
 
         for row, col in valid_moves:
             new_board = self._copy_board(board)
@@ -89,15 +153,30 @@ class OthelloAI:
             score = self.minimax(new_board, depth - 1, player, alpha, beta)
 
             if is_maximising:
-                best_score = max(best_score, score)
+                if score > best_score:
+                    best_score = score
+                    best_move = (row, col)
+
                 alpha = max(alpha, score)
             else:
-                best_score = min(best_score, score)
+                if score < best_score:
+                    best_score = score
+                    best_move = (row, col)
+
                 beta = min(beta, score)
 
             if beta <= alpha:
                 break
 
+        if best_score <= alpha_original:
+            flag = "UPPER"
+        elif best_score >= beta_original:
+            flag = "LOWER"
+        else:
+            flag = "EXACT"
+
+        self.transposition_table[key] = (depth, best_score, flag, best_move)
+        
         return best_score
 
     def get_best_move(self, board: OthelloBoard, player):
@@ -106,6 +185,8 @@ class OthelloAI:
         """
         if player != board.current_player:
             raise ValueError("Player must match board.current_player")
+
+        # self.transposition_table.clear()
 
         valid_moves = board.get_valid_moves(player)
         best_score = -float('inf')
@@ -130,31 +211,43 @@ if __name__ == "__main__":
     import time
     import subprocess
     board = OthelloBoard()
-    ai = OthelloAI(depth=3)
+    ai = OthelloAI(depth=5)
 
     times = []
 
-    while board.get_valid_moves(BLACK) or board.get_valid_moves(WHITE):
-        try:
-            subprocess.run(["clear"], check=False)
-            print(board)
-            t0 = time.time()
-            move = ai.get_best_move(board, board.current_player)
-            t1 = time.time()
-            print(f"AI ({board.current_player}) picked: {move} in {t1-t0:.2f}s")
-            times.append(t1-t0)
+    with open("benchmark.log", "w") as log:
+        move_number = 1
 
-            if move is not None:
-                board.make_move(*move)
-            else:
-                board.pass_turn()
+        while board.get_valid_moves(BLACK) or board.get_valid_moves(WHITE):
+            try:
+                subprocess.run(["clear"], check=False)
+                print(board)
 
-            # time.sleep(0.5)
+                t0 = time.time()
+                move = ai.get_best_move(board, board.current_player)
+                t1 = time.time()
 
-        except KeyboardInterrupt:
-            print("Exiting...")
-            break
+                elapsed = t1 - t0
+                entry = f"Move {move_number}: AI ({board.current_player}) -> {move} in {elapsed:.4f}s"
+
+                print(entry)
+                log.write(entry + "\n")
+                log.flush()
+
+                times.append(elapsed)
+
+                if move is not None:
+                    board.make_move(*move)
+                else:
+                    board.pass_turn()
+
+                move_number += 1
+
+            except KeyboardInterrupt:
+                print("Exiting...")
+                break
 
     print("Minimum time:", min(times))
     print("Maximum time:", max(times))
     print("Average time:", sum(times)/len(times))
+    print("Transposition table:", len(ai.transposition_table))
