@@ -324,6 +324,7 @@ def get_history_step(game_id, step):
     return jsonify({
         "board": replay_board.board,
         "last_move": list(replay_board.last_move) if replay_board.last_move else None,
+        "last_flips": [list(f) for f in replay_board.last_flips],
         "step": step,
         "total_steps": len(move_history),
     })

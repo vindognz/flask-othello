@@ -359,6 +359,8 @@ async function handleRespondDraw(accept) {
 let currentStep = 0;
 let totalSteps = 0;
 
+// function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) {
+
 async function goToStep(step) {
     const response = await fetch(`/api/archive/${gameId}/history/${step}`);
     const data = await response.json();
@@ -370,7 +372,7 @@ async function goToStep(step) {
 
     currentStep = data.step;
     totalSteps = data.total_steps;
-    renderCells(data.board, data.last_move, [], false);
+    renderCells(data.board, data.last_move, [], false, data.last_flips);
 }
 
 document.getElementById("history-start")?.addEventListener("click", () => goToStep(0));
