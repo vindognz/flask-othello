@@ -56,34 +56,50 @@ function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) 
             const cell = document.createElement("div");
             cell.className = "cell";
 
-            if (cellValue === 1) {
-                cell.classList.add("black");
-            } else if (cellValue === 2) {
-                cell.classList.add("white");
+            const flipIndex = flippedCells.findIndex(
+                (pos) => pos[0] === row && pos[1] === col
+            );
+
+            if (flipIndex !== -1 && lastMove) {
+                const distance = Math.max(
+                    Math.abs(row - lastMove[0]),
+                    Math.abs(col - lastMove[1])
+                );
+
+                // start the piece as its old colour
+                cell.classList.add(cellValue === 1 ? "white" : "black");
+                cell.classList.add("flipping");
+                cell.style.setProperty("--flip-delay", `${distance * 75}ms`);
+
+                // change to the new colour when the piece is edge on
+                setTimeout(() => {
+                    cell.classList.remove("black", "white");
+                    cell.classList.add(cellValue === 1 ? "black" : "white");
+                }, distance * 75 + 125);
+            } else {
+                if (cellValue === 1) {
+                    cell.classList.add("black");
+                } else if (cellValue === 2) {
+                    cell.classList.add("white");
+                }
             }
 
             if (lastMove && row === lastMove[0] && col === lastMove[1]) {
                 cell.classList.add("last-move");
             }
 
-            const wasFlipped = flippedCells.some(
-                (pos) => pos[0] === row && pos[1] === col
-            );
-            if (wasFlipped) {
-                cell.classList.add("flipping")
-            }
-
             if (clickable) {
                 const isLegal = legalMoves.some(
                     (move) => move[0] === row && move[1] === col
                 );
+
                 if (isLegal) {
                     cell.classList.add("legal-move");
                     cell.addEventListener("click", () => handleCellClick(row, col));
                 }
             }
 
-            container.appendChild(cell); // add this cell to the grid container
+            container.appendChild(cell);
         }
     }
 }
@@ -227,7 +243,6 @@ async function handleCellClick(row, col) {
     const data = await response.json();
 
     if (!response.ok) {
-        // document.getElementById("status").textContent = data.error;
         setStatus(data.error);
         return;
     }
@@ -241,7 +256,6 @@ async function handleCellClick(row, col) {
 
     // is it now AI's turn?
     if (data.opponent_is_ai && data.your_colour !== data.current_player) {
-        // document.getElementById("status").textContent = aiThinkingMsg;
         setStatus(aiThinkingMsg, true);
 
         const aiResponse = await ensureMinDelay(
@@ -285,7 +299,6 @@ async function handleOfferDraw() {
     const data = await response.json();
 
     if (!response.ok) {
-        // document.getElementById("status").textContent = data.error;
         setStatus(data.error);
         return;
     }
@@ -364,21 +377,20 @@ document.getElementById("history-start")?.addEventListener("click", () => goToSt
 document.getElementById("history-end")?.addEventListener("click", () => goToStep(totalSteps));
 
 let holdTimer = null;
-let repeatTimer = null;
 let holding = false;
 
-function startHolding(action) {
+async function startHolding(action) {
     if (holding) return;
 
     holding = true;
-    action(); // one call immediately
+    await action(); // one call immediately
 
-    holdTimer = setTimeout(() => {
-        repeatTimer = setInterval(async () => {
-            if (!holding) return;
+    holdTimer = setTimeout(async function repeat() {
+        if (!holding) return;
 
-            await action();
-        }, 50);
+        await action();
+
+        holdTimer = setTimeout(repeat, 50);
     }, 500);
 }
 
@@ -386,10 +398,7 @@ function stopHolding() {
     holding = false;
 
     clearTimeout(holdTimer);
-    clearInterval(repeatTimer);
-
     holdTimer = null;
-    repeatTimer = null;
 }
 
 const prevButton = document.getElementById("history-prev");
@@ -411,13 +420,13 @@ nextButton.addEventListener("pointerdown", () => {
     });
 });
 
-prevButton.addEventListener("pointerup", stopHolding)
-prevButton.addEventListener("pointercancel", stopHolding)
-prevButton.addEventListener("pointerleave", stopHolding)
+prevButton.addEventListener("pointerup", stopHolding);
+prevButton.addEventListener("pointercancel", stopHolding);
+prevButton.addEventListener("pointerleave", stopHolding);
 
-nextButton.addEventListener("pointerup", stopHolding)
-nextButton.addEventListener("pointercancel", stopHolding)
-nextButton.addEventListener("pointerleave", stopHolding)
+nextButton.addEventListener("pointerup", stopHolding);
+nextButton.addEventListener("pointercancel", stopHolding);
+nextButton.addEventListener("pointerleave", stopHolding);
 
 document.getElementById("resign-btn")?.addEventListener("click", handleResign);
 document.getElementById("offer-draw-btn")?.addEventListener("click", handleOfferDraw);

@@ -92,15 +92,24 @@ button:hover {
 }
 
 .cell.flipping::after {
-    animation: flip-piece 0.5s ease;
+    animation: flip-piece 0.25s ease both;
+    animation-delay: var(--flip-delay);
+}
+
+.cell::after {
+    transform-style: preserve-3d;
+    backface-visibility: visible;
 }
 
 @keyframes flip-piece {
     0% {
-        transform: scale(0);
+        transform: rotateY(0deg);
+    }
+    50% {
+        transform: rotateY(90deg);
     }
     100% {
-        transform: scale(1);
+        transform: rotateY(180deg);
     }
 }
 
