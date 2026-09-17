@@ -113,6 +113,70 @@ class BitBoard:
 
         return moves & empty
 
+    def make_move(self, row, col):
+        """ Return a new BitBoard with the move applied. """
+
+        move = 1 << (row * 8 + col)
+
+        player = self.current_player
+        opponent = self.opponent
+
+        player_bits = self._player_bits(player)
+        opponent_bits = self._player_bits(opponent)
+
+        flipped = 0
+
+        for shift, mask in DIRECTIONS:
+            if shift > 0:
+                x = (move << shift) & mask
+            else:
+                x = (move >> -shift) & mask
+
+            captured = 0
+
+            while x & opponent_bits:
+                captured |= x
+
+                if shift > 0:
+                    x = (x << shift) & mask
+                else:
+                    x = (x >> -shift) & mask
+
+            if x & player_bits:
+                flipped |= captured
+
+        player_bits |= move | flipped
+        opponent_bits &= ~flipped
+
+        if player == BLACK:
+            black = player_bits
+            white = opponent_bits
+        else:
+            black = opponent_bits
+            white = player_bits
+
+        # switch to the opponent
+        next_player = opponent
+
+        result = BitBoard(
+            black=black,
+            white=white,
+            current_player=next_player,
+        )
+
+        next_player_moves = result.get_valid_moves(next_player)
+        mover_moves = result.get_valid_moves(player)
+
+        # both players have no moves = game over
+        if not next_player_moves and not mover_moves:
+            return result
+
+        # opponent has no moves = automatically pass back
+        if not next_player_moves:
+            result.current_player = player
+
+        return result
+
 
 
 if __name__ == "__main__":
@@ -132,35 +196,32 @@ if __name__ == "__main__":
             if bb_moves & (1 << square)
         }
 
-        if normal_moves != converted_moves:
-            print(f"\nMISMATCH ON MOVE {move_number}")
-            print(board)
-            print("Normal:  ", sorted(normal_moves))
-            print("Bitboard:", sorted(converted_moves))
-            print()
-
-            # which squares differ
-            print("Missing from bitboard:")
-            print(sorted(normal_moves - converted_moves))
-
-            print("Extra in bitboard:")
-            print(sorted(converted_moves - normal_moves))
-
-            break
-
-        print(f"Move {move_number}: {len(normal_moves)} valid moves")
+        assert normal_moves == converted_moves, (
+            f"Move generation mismatch on move {move_number}!\n"
+            f"Normal: {normal_moves}\n"
+            f"Bitboard: {converted_moves}"
+        )
 
         if not normal_moves:
-            board.pass_turn()
-
-            if not board.get_valid_moves(board.current_player):
-                print("\nGame over — both players have no moves.")
-                break
-
-            continue
+            print("\nGame over!")
+            break
 
         move = sorted(normal_moves)[0]
-        board.make_move(*move)
 
-    else:
-        print("\nBitboard worked the entire game")
+        board.make_move(*move)
+        bitboard = bitboard.make_move(*move)
+
+        assert bitboard.to_board() == board.board, (
+            f"Position mismatch after move {move_number}!\n"
+            f"Move: {move}"
+        )
+
+        assert bitboard.current_player == board.current_player, (
+            f"Player mismatch after move {move_number}!\n"
+            f"BitBoard: {bitboard.current_player}\n"
+            f"Board: {board.current_player}"
+        )
+
+        print(f"Move {move_number}: {move}")
+
+    print("\nBitBoard survived move generation + make_move!")
