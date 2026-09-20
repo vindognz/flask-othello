@@ -24,6 +24,7 @@ class BitBoard:
         self.black = black
         self.white = white
         self.current_player = current_player
+        self._cached_moves = None
 
     @classmethod
     def from_board(cls, board):
@@ -56,14 +57,6 @@ class BitBoard:
         return board
 
     @property
-    def occupied(self):
-        return self.black | self.white
-
-    @property
-    def empty(self):
-        return FULL_BOARD & ~self.occupied
-
-    @property
     def opponent(self):
         return WHITE if self.current_player == BLACK else BLACK
 
@@ -76,16 +69,12 @@ class BitBoard:
         else:
             self.white = bits
 
-    def get_valid_moves(self, player=None):
-        if player is None:
-            player = self.current_player
-
+    def _compute_valid_moves(self, player):
+        """ Actually calculate the valid-move bitmask (no caching yet) """
         player_bits = self._player_bits(player)
-        opponent_bits = self._player_bits(
-            WHITE if player == BLACK else BLACK
-        )
+        opponent_bits = self._player_bits(WHITE if player == BLACK else BLACK)
 
-        empty = self.empty
+        empty = FULL_BOARD & ~(player_bits | opponent_bits)
         moves = 0
 
         for shift, mask in DIRECTIONS:
@@ -113,11 +102,21 @@ class BitBoard:
 
         return moves & empty
 
+    def get_valid_moves(self, player=None):
+        """ Get the valid-move bitmask and cache it """
+        if player is None:
+            player = self.current_player
+
+        if player == self.current_player:
+            if self._cached_moves is None:
+                self._cached_moves = self._compute_valid_moves(player)
+            return self._cached_moves
+
+        return self._compute_valid_moves(player)
+
     def make_move(self, row, col):
         """ Return a new BitBoard with the move applied. """
-
         move = 1 << (row * 8 + col)
-
         player = self.current_player
         opponent = self.opponent
 
@@ -136,7 +135,6 @@ class BitBoard:
 
             while x & opponent_bits:
                 captured |= x
-
                 if shift > 0:
                     x = (x << shift) & mask
                 else:
@@ -149,32 +147,29 @@ class BitBoard:
         opponent_bits &= ~flipped
 
         if player == BLACK:
-            black = player_bits
-            white = opponent_bits
+            black, white = player_bits, opponent_bits
         else:
-            black = opponent_bits
-            white = player_bits
+            black, white = opponent_bits, player_bits
 
-        # switch to the opponent
-        next_player = opponent
+        result = BitBoard(black=black, white=white, current_player=opponent)
 
-        result = BitBoard(
-            black=black,
-            white=white,
-            current_player=next_player,
-        )
+        # populate the new board's cache directly
+        next_player_moves = result._compute_valid_moves(opponent)
 
-        next_player_moves = result.get_valid_moves(next_player)
-        mover_moves = result.get_valid_moves(player)
-
-        # both players have no moves = game over
-        if not next_player_moves and not mover_moves:
+        if next_player_moves:
+            result._cached_moves = next_player_moves
             return result
 
-        # opponent has no moves = automatically pass back
-        if not next_player_moves:
-            result.current_player = player
+        mover_moves = result._compute_valid_moves(player)
 
+        if not mover_moves:
+            # neither player has a move = game over, current_player stays as opponent
+            result._cached_moves = next_player_moves
+            return result
+
+        # opponent has no moves = pass back to the original mover
+        result.current_player = player
+        result._cached_moves = mover_moves
         return result
 
 
