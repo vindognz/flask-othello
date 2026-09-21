@@ -218,7 +218,7 @@ if __name__ == "__main__":
 	import subprocess
 
 	board = OthelloBoard()
-	ai = OthelloAI(depth=5)
+	ai = OthelloAI(depth=6)
 	times = []
 
 	with open("benchmark.log", "w") as log:
