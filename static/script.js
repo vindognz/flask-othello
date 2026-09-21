@@ -6,6 +6,8 @@ import {
     drawDeclinedMsg,
 } from "./strings.js";
 
+// ---------- Game identity ----------
+
 function getGameId() {
     const parts = window.location.pathname.split("/");
     return parts[parts.length - 1];
@@ -18,6 +20,43 @@ if (!gameId) {
     document.getElementById("status").textContent = "No game ID in URL (you monkey)";
     // i lowkey don't know if this is even a possible case LMAO
 }
+
+// ---------- State ----------
+
+let statusOverrideActive = false;
+let lastAnimatedMove = null;
+
+let currentStep = 0;
+let totalSteps = 0;
+
+let holdTimer = null;
+let holding = false;
+
+// ---------- Cached DOM references ----------
+
+const copyCodeBtn = document.getElementById("copy-code-btn");
+const prevButton = document.getElementById("history-prev");
+const nextButton = document.getElementById("history-next");
+
+// ---------- Utils ----------
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureMinDelay(promise, minMs) {
+    const start = Date.now();
+    const result = await promise;
+    const elapsed = Date.now() - start;
+
+    if (elapsed < minMs) {
+        await sleep(minMs - elapsed);
+    }
+
+    return result;
+}
+
+// ---------- Data fetching ----------
 
 async function fetchGameState() {
     const url = isArchive ? `/api/archive/${gameId}` : `/api/game/${gameId}`;
@@ -43,6 +82,8 @@ async function fetchGameState() {
         renderBoard(data);
     }
 }
+
+// ---------- Rendering ----------
 
 function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) {
     // shared cell-drawing logic used by both live games and archives
@@ -104,11 +145,15 @@ function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) 
     }
 }
 
-let lastAnimatedMove = null;
-
 function renderBoard(data, clearOverride = false) {
     if (clearOverride) {
         statusOverrideActive = false;
+    }
+
+    if (data.both_joined) {
+        copyCodeBtn.style.display = "none";
+    } else {
+        copyCodeBtn.style.display = "";
     }
 
     const isMyTurn = data.your_colour === data.current_player;
@@ -173,7 +218,7 @@ function renderArchive(data) {
     }
 }
 
-let statusOverrideActive = false;
+// ---------- Status ----------
 
 function setStatus(text, isOverride = false) {
     document.getElementById("status").textContent = text;
@@ -221,17 +266,7 @@ function updateStatus(data) {
     }
 }
 
-async function ensureMinDelay(promise, minMs) {
-    const start = Date.now();
-    const result = await promise;
-    const elapsed = Date.now() - start;
-
-    if (elapsed < minMs) {
-        await sleep(minMs - elapsed);
-    }
-
-    return result;
-}
+// ---------- Action handlers ----------
 
 async function handleCellClick(row, col) {
     const response = await fetch(`/api/game/${gameId}/move`, {
@@ -288,10 +323,6 @@ async function handleResign() {
     }
 }
 
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function handleOfferDraw() {
     const response = await fetch(`/api/game/${gameId}/offer-draw`, {
         method: "POST",
@@ -343,7 +374,7 @@ async function handleRespondDraw(accept) {
     const data = await response.json();
 
     if (!response.ok) {
-        document.getElementById("status").textContent = data.error;
+        setStatus(data.error);
         return;
     }
 
@@ -355,9 +386,7 @@ async function handleRespondDraw(accept) {
     fetchGameState();
 }
 
-
-let currentStep = 0;
-let totalSteps = 0;
+// ---------- History / replay ----------
 
 async function goToStep(step) {
     const response = await fetch(`/api/archive/${gameId}/history/${step}`);
@@ -372,12 +401,6 @@ async function goToStep(step) {
     totalSteps = data.total_steps;
     renderCells(data.board, data.last_move, [], false, data.last_flips);
 }
-
-document.getElementById("history-start")?.addEventListener("click", () => goToStep(0));
-document.getElementById("history-end")?.addEventListener("click", () => goToStep(totalSteps));
-
-let holdTimer = null;
-let holding = false;
 
 async function startHolding(action) {
     if (holding) return;
@@ -401,10 +424,12 @@ function stopHolding() {
     holdTimer = null;
 }
 
-const prevButton = document.getElementById("history-prev");
-const nextButton = document.getElementById("history-next");
+// ---------- Event wiring ----------
 
-prevButton.addEventListener("pointerdown", () => {
+document.getElementById("history-start")?.addEventListener("click", () => goToStep(0));
+document.getElementById("history-end")?.addEventListener("click", () => goToStep(totalSteps));
+
+prevButton?.addEventListener("pointerdown", () => {
     startHolding(async () => {
         if (currentStep > 0) {
             await goToStep(currentStep - 1);
@@ -412,7 +437,7 @@ prevButton.addEventListener("pointerdown", () => {
     });
 });
 
-nextButton.addEventListener("pointerdown", () => {
+nextButton?.addEventListener("pointerdown", () => {
     startHolding(async () => {
         if (currentStep < totalSteps) {
             await goToStep(currentStep + 1);
@@ -433,6 +458,15 @@ document.getElementById("offer-draw-btn")?.addEventListener("click", handleOffer
 
 document.getElementById("accept-draw-btn")?.addEventListener("click", () => handleRespondDraw(true));
 document.getElementById("decline-draw-btn")?.addEventListener("click", () => handleRespondDraw(false));
+
+copyCodeBtn?.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    const original = copyCodeBtn.textContent;
+    copyCodeBtn.textContent = "Copied!";
+    setTimeout(() => { copyCodeBtn.textContent = original; }, 1000);
+});
+
+// ---------- Bootstrap ----------
 
 fetchGameState();
 
