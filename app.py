@@ -333,13 +333,13 @@ def get_history_step(game_id, step):
 def serve_game_page(game_id):
     if game_id in archives:
         return redirect(f"/archive/{game_id}")
-    return render_template("index.html")
+    return render_template("game.html")
 
 @app.route("/archive/<game_id>", methods=['GET'])
 def serve_archive_page(game_id):
     if game_id not in archives:
         return "Archive not found", 404
-    return render_template("index.html")
+    return render_template("game.html")
 
 @app.route("/", methods=['GET'])
 def landing():

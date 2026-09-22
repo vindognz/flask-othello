@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlaskOthello</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <a href="/" class="home-link" title="Home">🏠</a>
+
+    <button id="rules-btn" class="home-link" style="left: auto; right: 1rem;" title="How to play">?</button>
+    <div id="rules-modal" style="display: none;">
+        <div id="rules-panel">
+            <button id="rules-close">&times;</button>
+            <div id="rules-mini-container"></div>
+            <p id="rules-caption" style="white-space: pre-line;"></p>
+            <div id="rules-nav">
+                <button id="rules-prev">&lt;</button>
+                <span id="rules-indicator"></span>
+                <button id="rules-next">&gt;</button>
+            </div>
+        </div>
+    </div>
+
+    <p id="status"></p>
+    <button id="copy-code-btn" style="display: none;">Copy Invite Link</button>
+    <div id="container"></div>
+
+    <div id="game-buttons" style="display: none;">
+        <button id="resign-btn">Resign</button>
+        <button id="offer-draw-btn">Offer Draw</button>
+
+        <div id="draw-popup" style="display: none;">
+            <p>Your opponent offered a draw.</p>
+            <button id="accept-draw-btn">Accept</button>
+            <button id="decline-draw-btn">Decline</button>
+        </div>
+    </div>
+
+    <div id="history-controls" style="display: none;">
+        <button id="history-start">&laquo;</button>
+        <button id="history-prev">&lt;</button>
+        <button id="history-next">&gt;</button>
+        <button id="history-end">&raquo;</button>
+    </div>
+    <script type="module" src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        const EMPTY_MINI = () => Array.from({ length: 8 }, () => Array(8).fill(0));
+
+        const RULES_SLIDES = [
+            {
+                board: (() => {
+                    const b = EMPTY_MINI();
+                    b[3][3] = 2; b[3][4] = 1;
+                    b[4][3] = 1; b[4][4] = 2;
+                    return b;
+                })(),
+                legal: [],
+                lastMove: null,
+                caption: "Black moves first. The game starts with four tiles in the centre."
+            },
+            {
+                board: (() => {
+                    const b = EMPTY_MINI();
+                    b[3][3] = 2; b[3][4] = 1;
+                    b[4][3] = 1; b[4][4] = 2;
+                    return b;
+                })(),
+                legal: [[2, 3]],
+                lastMove: null,
+                caption: "Place a piece to trap one or more of your opponent's pieces between your new piece and another you own, in a straight line."
+            },
+            {
+                board: (() => {
+                    const b = EMPTY_MINI();
+                    b[2][3] = 1;
+                    b[3][3] = 1; b[3][4] = 1;
+                    b[4][3] = 1; b[4][4] = 2;
+                    return b;
+                })(),
+                legal: [],
+                lastMove: [2, 3],
+                caption: "Trapped pieces flip to your colour.",
+            },
+            {
+                board: [
+                    [1,1,1,1,1,1,1,2],
+                    [1,1,1,1,1,1,2,2],
+                    [1,1,1,1,1,2,1,2],
+                    [1,1,1,1,2,1,1,2],
+                    [1,1,1,2,1,1,1,2],
+                    [1,1,2,1,1,1,1,2],
+                    [1,2,1,1,1,1,1,2],
+                    [2,2,2,2,2,2,2,2],
+                ],
+                legal: [],
+                lastMove: null,
+                caption: "When neither player has a legal move, the game ends. Whoever has more pieces wins.\n\nIf you have no legal move on your turn, you'll pass automatically."
+            },
+        ];
+
+        let rulesIndex = 0;
+
+        function renderRulesSlide() {
+            const slide = RULES_SLIDES[rulesIndex];
+            const container = document.getElementById("rules-mini-container");
+            container.innerHTML = "";
+
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const cell = document.createElement("div");
+                    cell.className = "cell";
+
+                    const value = slide.board[row][col];
+                    if (value === 1) cell.classList.add("black");
+                    if (value === 2) cell.classList.add("white");
+
+                    if (slide.legal.some(([r, c]) => r === row && c === col)) {
+                        cell.classList.add("legal-move");
+                    }
+
+                    if (slide.lastMove && slide.lastMove[0] === row && slide.lastMove[1] === col) {
+                        cell.classList.add("last-move");
+                    }
+
+                    container.appendChild(cell);
+                }
+            }
+
+            document.getElementById("rules-caption").textContent = slide.caption;
+            document.getElementById("rules-indicator").textContent = `${rulesIndex + 1} / ${RULES_SLIDES.length}`;
+        }
+
+        document.getElementById("rules-btn")?.addEventListener("click", () => {
+            rulesIndex = 0;
+            renderRulesSlide();
+            document.getElementById("rules-modal").style.display = "flex";
+        });
+
+        document.getElementById("rules-close")?.addEventListener("click", () => {
+            document.getElementById("rules-modal").style.display = "none";
+        });
+
+        document.getElementById("rules-prev")?.addEventListener("click", () => {
+            rulesIndex = (rulesIndex - 1 + RULES_SLIDES.length) % RULES_SLIDES.length;
+            renderRulesSlide();
+        });
+
+        document.getElementById("rules-next")?.addEventListener("click", () => {
+            rulesIndex = (rulesIndex + 1) % RULES_SLIDES.length;
+            renderRulesSlide();
+        });
+    </script>
+</body>
+</html>
