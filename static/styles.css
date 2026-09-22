@@ -139,3 +139,23 @@ button:hover {
     color: #e05555;
     margin-bottom: 0.5rem;
 }
+
+.home-link {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    font-size: 2rem;
+    text-decoration: none;
+    background: #3a3a3a;
+    border-radius: 8px;
+    transition: background-color 0.15s ease;
+}
+
+.home-link:hover {
+    background: #4a4a4a;
+}
