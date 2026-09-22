@@ -2,6 +2,7 @@
 
 from board import BLACK, WHITE, OthelloBoard
 from bitboard import BitBoard
+import random
 
 WEIGHTS = [
 	[100, -20,  10,   5,   5,  10, -20, 100],
@@ -192,6 +193,9 @@ class OthelloAI:
 
 		if not valid_moves:
 			return None
+
+		if self.depth == 0:
+			return random.choice(sorted(valid_moves))
 
 		best_score = -float("inf")
 		best_move = None

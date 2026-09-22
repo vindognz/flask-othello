@@ -15,10 +15,19 @@
         <button onclick="chooseOpponent('cpu')">Computer</button>
     </div>
 
-    <div id="colour-choice" style="display: none;">
-        <p>Play as:</p>
-        <button onclick="createGame('black')">Black</button>
-        <button onclick="createGame('white')">White</button>
+    <div id="colour-choice">
+        <div id="difficulty-section" style="display: none;">
+            <p>Difficulty:</p>
+            <button onclick="setDifficulty(0)">Easy</button>
+            <button onclick="setDifficulty(1)">Medium</button>
+            <button onclick="setDifficulty(5)">Impossible</button>
+        </div>
+
+        <div id="colour-buttons" style="display: none;">
+            <p>Play as:</p>
+            <button onclick="createGame('black')">Black</button>
+            <button onclick="createGame('white')">White</button>
+        </div>
 
         <div id="join-section" style="display: none;">
             <p id="code-error" style="display: none;">Invalid game code.</p>
@@ -29,22 +38,32 @@
 
     <script>
         let chosenOpponent = null;
+        let chosenDepth = 1; // medium if you somehow start an AI game without selecting a difficulty
 
         function chooseOpponent(type) {
             chosenOpponent = type;
             document.getElementById("opponent-choice").style.display = "none";
-            document.getElementById("colour-choice").style.display = "block";
 
             if (type === 'human') {
+                document.getElementById("colour-buttons").style.display = "block";
                 document.getElementById("join-section").style.display = "block";
+            } else {
+                document.getElementById("difficulty-section").style.display = "block";
+                // colour-choice stays hidden until a difficulty is picked
             }
+        }
+
+        function setDifficulty(depth) {
+            chosenDepth = depth;
+            document.getElementById("colour-buttons").style.display = "block";
+            document.getElementById("difficulty-section").style.display = "none";
         }
 
         async function createGame(colour) {
             const response = await fetch("/api/game/new", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ host_colour: colour, opponent: chosenOpponent }),
+                body: JSON.stringify({ host_colour: colour, opponent: chosenOpponent, ai_depth: chosenDepth }),
             });
             const data = await response.json();
             window.location.href = `/game/${data.game_id}`;
