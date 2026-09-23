@@ -32,11 +32,22 @@ let totalSteps = 0;
 let holdTimer = null;
 let holding = false;
 
+let pollInterval = null;
+
 // ---------- Cached DOM references ----------
 
 const copyCodeBtn = document.getElementById("copy-code-btn");
 const prevButton = document.getElementById("history-prev");
 const nextButton = document.getElementById("history-next");
+
+// ---------- Sound effects! ----------
+
+const moveSound = new Audio('/static/sfx/place.mp3');
+const captureSound = new Audio('/static/sfx/capture.mp3');
+const clickSound = new Audio('/static/sfx/click.mp3');
+ 
+captureSound.volume = 0.4;
+clickSound.volume = 0.5;
 
 // ---------- Utils ----------
 
@@ -54,6 +65,20 @@ async function ensureMinDelay(promise, minMs) {
     }
 
     return result;
+}
+
+function playSound(audio) {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+}
+
+function startPolling() {
+    pollInterval = setInterval(fetchGameState, 1500);
+}
+
+function stopPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = null;
 }
 
 // ---------- Data fetching ----------
@@ -116,6 +141,7 @@ function renderCells(board, lastMove, legalMoves, clickable, flippedCells = []) 
                 setTimeout(() => {
                     cell.classList.remove("black", "white");
                     cell.classList.add(cellValue === 1 ? "black" : "white");
+                    playSound(captureSound);
                 }, distance * 150 + 125);
             } else {
                 if (cellValue === 1) {
@@ -165,6 +191,7 @@ function renderBoard(data, clearOverride = false) {
 
     if (isNewMove) {
         lastAnimatedMove = moveKey;
+        playSound(moveSound);
     }
 
     renderCells(data.board, data.last_move, data.current_legal_moves, canClick, flipsToAnimate);
@@ -291,14 +318,18 @@ async function handleCellClick(row, col) {
 
     // is it now AI's turn?
     if (data.opponent_is_ai && data.your_colour !== data.current_player) {
+        stopPolling();
         setStatus(aiThinkingMsg, true);
 
         const aiResponse = await ensureMinDelay(
             fetch(`/api/game/${gameId}/ai-move`, {
                 method: "POST"
-            }), 1000
+            }), 1500
         );
+
         const aiData = await aiResponse.json();
+
+        startPolling();
 
         if (aiResponse.ok) {
             renderBoard(aiData, true);
@@ -347,8 +378,12 @@ async function handleOfferDraw() {
 
     setStatus(drawOfferedWaitingMsg, true);
 
+    stopPolling();
+
     const delay = 2500 + Math.random() * 5000;
     await sleep(delay);
+
+    startPolling()
 
     const followUp = await fetch(`/api/game/${gameId}`);
     const followUpData = await followUp.json();
@@ -466,10 +501,16 @@ copyCodeBtn?.addEventListener("click", async () => {
     setTimeout(() => { copyCodeBtn.textContent = original; }, 1000);
 });
 
+document.addEventListener("mousedown", (event) => {
+    if (event.target.closest("button")) {
+        playSound(clickSound);
+    }
+});
+
 // ---------- Bootstrap ----------
 
 fetchGameState();
 
 if (!isArchive) {
-    setInterval(fetchGameState, 1500);
+    startPolling();
 }

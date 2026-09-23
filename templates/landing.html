@@ -83,5 +83,16 @@
             }
         }
     </script>
+
+    <script>
+        const clickSound = new Audio("/static/sfx/click.mp3");
+        clickSound.volume = 0.5;
+        document.addEventListener("mousedown", (event) => {
+            if (event.target.closest("button")) {
+                clickSound.currentTime = 0;
+                clickSound.play().catch(() => {});
+            }
+        });
+    </script>
 </body>
 </html>
